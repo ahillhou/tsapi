@@ -29,6 +29,15 @@ def test_so():
 
     return {"service_order": so_number, "equipment_result": equipment_result}
 
+@app.post("/tdx/webhook")
+def tdx_webhook(payload: dict):
+
+    print("Webhook received")
+    print(payload)
+
+    return {
+        "status": "received"
+    }
 
 @app.get("/ticket/{ticket_id}")
 def ticket_lookup(ticket_id: int):
