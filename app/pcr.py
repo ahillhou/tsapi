@@ -1,6 +1,7 @@
 import requests
 #from dotenv import load_dotenv
 import os
+from app.tdx import build_ringcentral_remarks
 
 PCR_API_KEY = os.getenv("PCR_API_KEY")
 
@@ -66,6 +67,25 @@ def create_service_order():
     data = response.json()
 
     return data["servicedesk"]
+
+def create_service_request(description, remarks):
+
+    payload = {
+        "type": "SR",
+        "csr": 1,
+        "description": description,
+        "remarks": remarks
+    }
+
+    response = requests.post(
+        URL,
+        headers=HEADERS,
+        json=payload
+    )
+
+    response.raise_for_status()
+
+    return response.json()
 
 def add_equipment(so_number):
 

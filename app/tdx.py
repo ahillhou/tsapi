@@ -69,3 +69,30 @@ def search_tickets(search_body=None):
     response.raise_for_status()
 
     return response.json()
+
+def get_attribute(ticket, name):
+
+    for attr in ticket["Attributes"]:
+
+        if attr["Name"] == name:
+            return attr["ValueText"]
+
+    return None
+
+def build_ringcentral_remarks(ticket):
+
+    remarks = (
+        f"Requestor: {ticket['RequestorName']}<br><br>"
+        f"Email: {ticket['RequestorEmail']}<br><br>"
+        f"Extension Option: {get_attribute(ticket, 'RC Ext Options')}<br><br>"
+        f"Location: {get_attribute(ticket, 'RC Location')}<br><br>"
+        f"Address: {get_attribute(ticket, 'RC Address')}<br><br>"
+        f"Outbound ID: {get_attribute(ticket, 'RC Outbound ID')}<br><br>"
+        f"DASH COA: {get_attribute(ticket, 'RC DASH COA')}<br><br>"
+        f"Account Type: {get_attribute(ticket, 'RC Account Type')}<br><br>"
+        f"Queue Option: {get_attribute(ticket, 'RC Queue Options')}<br><br>"
+        f"Physical Handset: {get_attribute(ticket, 'RC Physical Handset')}<br><br>"
+        f"Data Port: {get_attribute(ticket, 'RC Physical Handset Data Port')}"
+    )
+
+    return remarks
