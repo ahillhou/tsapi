@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY pyproject.toml .
 
-RUN pip install fastapi uvicorn requests
+RUN pip install fastapi uvicorn requests ringcentral
 
 COPY . .
 
