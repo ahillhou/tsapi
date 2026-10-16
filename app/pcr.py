@@ -87,6 +87,19 @@ def create_service_request(description, remarks):
 
     return response.json()
 
+def build_new_account_remarks(ticket):
+
+    remarks = ""
+
+    for attr in ticket.get("Attributes", []):
+
+        remarks += (
+            f"{attr['Name']}: "
+            f"{attr['ValueText']}<br><br>"
+        )
+
+    return remarks
+
 def add_equipment(so_number):
 
     payload = {
