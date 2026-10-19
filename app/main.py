@@ -1,6 +1,5 @@
 import os
 import json
-#import threading
 
 from fastapi import FastAPI, Request
 from app.tdx import get_ticket
@@ -10,9 +9,10 @@ from app.pcr import create_service_order
 from app.pcr import create_service_request
 from app.pcr import add_equipment
 from app.pcr import build_new_account_remarks
-#from app.poller import poll_tdx
 from app.processor import process_ringcentral_ticket
 from .ring_test import set_dnd
+from app.services.nurse_dayoff_service import NurseDayOffService
+from app.integrations.ringcentral.auth import get_platform
 
 
 app = FastAPI()
@@ -88,6 +88,24 @@ def new_account_request(payload: dict):
         "service_request": result
     }
 
+@app.post("/ringcentral/dayoff")
+async def dayoff_webhook(request: Request):
+    body = await request.body()
+
+    body_str = body.decode("utf-8")
+    body_str = body_str.replace("\u00A0", " ")
+
+    data = json.loads(body_str)
+
+    service = NurseDayOffService()
+
+    result = service.handle(data)
+
+    return {
+        "status": "success",
+        "message": result
+    }
+
 @app.post("/ringcentral/dnd")
 async def webhook(request: Request):
 
@@ -129,6 +147,32 @@ async def webhook(request: Request):
     return {
         "status": "ignored",
         "command": command
+    }
+
+@app.post("/demo/dayoff")
+async def demo_dayoff(request: Request):
+
+    body = await request.body()
+
+    body_str = body.decode("utf-8")
+    body_str = body_str.replace("\u00A0", " ")
+
+    data = json.loads(body_str)
+
+    command = data["command"].strip().upper()
+
+    platform = get_platform()
+
+    service = NurseDayOffService(platform)
+
+    result = service.handle_extension_command(
+        "1017318040",
+        command
+    )
+
+    return {
+        "status": "success",
+        "message": result
     }
 
 @app.get("/ticket/{ticket_id}")

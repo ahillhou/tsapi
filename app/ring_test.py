@@ -3,18 +3,15 @@ from ringcentral import SDK
 
 CLIENT_ID = os.getenv("RC_CLIENT_ID")
 CLIENT_SECRET = os.getenv("RC_CLIENT_SECRET")
-SERVER_URL = "https://platform.ringcentral.com"
 JWT_TOKEN = os.getenv("RC_JWT_TOKEN")
+SERVER_URL = "https://platform.ringcentral.com"
+
 
 sdk = SDK(
     CLIENT_ID,
     CLIENT_SECRET,
     SERVER_URL
 )
-
-print("CLIENT_ID:", os.getenv("RC_CLIENT_ID"))
-print("CLIENT_SECRET:", os.getenv("RC_CLIENT_SECRET"))
-print("JWT_TOKEN:", os.getenv("RC_JWT_TOKEN"))
 
 platform = sdk.platform()
 platform.login(jwt=JWT_TOKEN)
@@ -39,3 +36,32 @@ def set_dnd(extension_id: str, enabled: bool):
     print("RingCentral API call completed")
 
     return response
+
+# def test_disable_pam_dayoff():
+
+#     extension_id = "1017318040"
+#     rule_id = "459804040"
+
+#     # Get the rule
+#     response = platform.get(
+#         f"/restapi/v2/accounts/~/extensions/{extension_id}/comm-handling/voice/interaction-rules/{rule_id}"
+#     )
+
+#     rule = response.json_dict()
+
+#     print("Current Enabled State:")
+#     print(rule["enabled"])
+
+#     # Disable it
+#     rule["enabled"] = True
+
+#     response = platform.patch(
+#         f"/restapi/v2/accounts/~/extensions/{extension_id}/comm-handling/voice/interaction-rules/{rule_id}",
+#         rule
+#     )
+
+#     print(response.json_dict())
+
+
+# if __name__ == "__main__":
+#     test_disable_pam_dayoff()
