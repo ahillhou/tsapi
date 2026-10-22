@@ -1,8 +1,6 @@
 import requests
 #from dotenv import load_dotenv
 import os
-from app.tdx import build_ringcentral_remarks
-from app.tdx import get_attribute
 
 PCR_API_KEY = os.getenv("PCR_API_KEY")
 
