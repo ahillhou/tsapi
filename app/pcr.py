@@ -98,13 +98,14 @@ def create_service_request(description, remarks):
 
     return response.json()
 
-def create_inquiry(description, remarks):
+def create_inquiry(subject, message, email, topic):
 
     payload = {
         "type": "IQ",
-        "csr": 1,
-        "description": description,
-        "remarks": remarks
+        "email": email,
+        "subject": subject,
+        "message": message,
+        "topic": topic
     }
 
     response = requests.post(

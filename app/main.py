@@ -98,11 +98,14 @@ def account_creation_request(payload: dict):
 
     ticket = payload["data"]
 
-    remarks = build_service_request_remarks(ticket)
+    #remarks = build_service_request_remarks(ticket)
+    remarks = "test"
 
     result = create_inquiry(
-        description=ticket["Title"],
-        remarks=remarks
+        subject=ticket["Title"],
+        message=remarks,
+        email=ticket["RequestorEmail"],
+        topic=349
     )
 
     return {
