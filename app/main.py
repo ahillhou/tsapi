@@ -4,7 +4,7 @@ import json
 from fastapi import FastAPI, Request
 from app.tdx import get_ticket
 from app.tdx import build_service_request_remarks
-from app.tdx import build_pcr_access_request_remarks
+from app.tdx import build_access_request_remarks
 from app.tdx import get_attribute
 from app.pcr import create_service_order
 from app.pcr import create_service_request
@@ -113,23 +113,55 @@ def account_creation_request(payload: dict):
         "inquiry": result
     }
 
-# #TDX RC form -> PCR360 as Service Request
+# #test this first
 # @app.post("/tdx/webhook/access_request")
-# def account_creation_request(payload: dict):
+# def account_creation_request2(payload: dict):
 
 #     ticket = payload["data"]
 
-#     remarks = build_pcr_access_request_remarks(ticket)
+#     remarks = build_access_request_remarks(ticket)
 
 #     result = create_inquiry(
-#         description=ticket["Title"],
-#         remarks=remarks
+#         subject=ticket["Title"],
+#         message=remarks,
+#         email=ticket["RequestorEmail"],
+#         topic=349
 #     )
 
 #     return {
 #         "status": "processed",
 #         "inquiry": result
 #     }
+
+@app.post("/tdx/webhook/account_creation_request")
+def account_creation_request(payload: dict):
+
+    ticket = payload["data"]
+
+    print("=" * 50)
+    print("PCR Access Request Received")
+    print(f"Ticket ID: {ticket['ID']}")
+    print(f"Title: {ticket['Title']}")
+
+    remarks = build_access_request_remarks(ticket)
+
+    print("Generated Remarks:")
+    print(remarks)
+
+    result = create_inquiry(
+        description=ticket["Title"],
+        remarks=remarks
+    )
+
+    print("PCR Response:")
+    print(result)
+
+    print("=" * 50)
+
+    return {
+        "status": "processed",
+        "service_request": result
+    }
 
 @app.post("/ringcentral/dayoff")
 async def dayoff_webhook(request: Request):
