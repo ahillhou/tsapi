@@ -108,14 +108,15 @@ def create_inquiry(description, remarks):
     }
 
     response = requests.post(
-        PCR_TEST_URL,
+        URL,
         headers=HEADERS,
         json=payload
     )
 
-    response.raise_for_status()
+    print("Status:", response.status_code)
+    print("Response:", response.text)
 
-    return response.json()
+    response.raise_for_status()
 
 def add_equipment(so_number):
 
