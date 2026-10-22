@@ -2,6 +2,7 @@ import requests
 #from dotenv import load_dotenv
 import os
 from app.tdx import build_ringcentral_remarks
+from app.tdx import get_attribute
 
 PCR_API_KEY = os.getenv("PCR_API_KEY")
 
@@ -86,19 +87,6 @@ def create_service_request(description, remarks):
     response.raise_for_status()
 
     return response.json()
-
-def build_new_account_remarks(ticket):
-
-    remarks = ""
-
-    for attr in ticket.get("Attributes", []):
-
-        remarks += (
-            f"{attr['Name']}: "
-            f"{attr['ValueText']}<br><br>"
-        )
-
-    return remarks
 
 def add_equipment(so_number):
 

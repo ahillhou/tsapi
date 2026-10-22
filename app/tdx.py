@@ -79,7 +79,7 @@ def get_attribute(ticket, name):
 
     return None
 
-def build_ringcentral_remarks(ticket):
+def build_service_request_remarks(ticket):
 
     remarks = (
         f"Requestor: {ticket['RequestorName']}<br><br>"

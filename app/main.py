@@ -3,12 +3,11 @@ import json
 
 from fastapi import FastAPI, Request
 from app.tdx import get_ticket
-from app.tdx import build_ringcentral_remarks
+from app.tdx import build_service_request_remarks
 from app.tdx import get_attribute
 from app.pcr import create_service_order
 from app.pcr import create_service_request
 from app.pcr import add_equipment
-from app.pcr import build_new_account_remarks
 from app.processor import process_ringcentral_ticket
 from .ring_test import set_dnd
 from app.services.nurse_dayoff_service import NurseDayOffService
@@ -63,23 +62,26 @@ def test_so():
 
     return {"service_order": so_number, "equipment_result": equipment_result}
 
+# @app.post("/tdx/webhook")
+# def tdx_webhook(payload: dict):
+
+#     print("Webhook received")
+#     print(payload)
+
+#     return {
+#         "status": "received"
+#     }
+
+#TDX RC form -> PCR360 as Service Request
 @app.post("/tdx/webhook")
-def tdx_webhook(payload: dict):
+def ringcentral_request(payload: dict):
 
-    print("Webhook received")
-    print(payload)
+    ticket = payload["data"]
 
-    return {
-        "status": "received"
-    }
-
-@app.post("/tdx_pcr/service_request/new_account")
-def new_account_request(payload: dict):
-
-    remarks = build_new_account_remarks(payload)
+    remarks = build_service_request_remarks(ticket)
 
     result = create_service_request(
-        description=payload["Title"],
+        description=ticket["Title"],
         remarks=remarks
     )
 
