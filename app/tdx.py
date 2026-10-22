@@ -93,6 +93,32 @@ def build_service_request_remarks(ticket):
         f"Queue Option: {get_attribute(ticket, 'RC Queue Options')}<br><br>"
         f"Physical Handset: {get_attribute(ticket, 'RC Physical Handset')}<br><br>"
         f"Data Port: {get_attribute(ticket, 'RC Physical Handset Data Port')}"
+        f"TDX Ticket: {ticket['WebUiUrl']}<br><br>"
     )
+
+    return remarks
+
+def build_pcr_access_request_remarks(ticket):
+
+    remarks = (
+        f"TDX Ticket ID: {ticket['ID']}<br><br>"
+        f"Requestor: {ticket['RequestorName']}<br><br>"
+        f"Email: {ticket['RequestorEmail']}<br><br>"
+        f"Department: {ticket['AccountName']}<br><br>"
+        f"Title: {ticket['Title']}<br><br>"
+        f"Access Change: {get_attribute(ticket, 'What access change do you need for PCR?')}<br><br>"
+        f"Billing Account Number: {get_attribute(ticket, 'Billing Account Number')}<br><br>"
+        f"TDX Ticket: {ticket['WebUiUrl']}<br><br>"
+    )
+
+    attachments = ticket.get("Attachments", [])
+
+    if attachments:
+        remarks += "Attachments Submitted:<br><br>"
+
+        for attachment in attachments:
+            remarks += (
+                f"- {attachment['Name']}<br><br>"
+            )
 
     return remarks

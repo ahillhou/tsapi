@@ -3,6 +3,18 @@ import requests
 import os
 
 PCR_API_KEY = os.getenv("PCR_API_KEY")
+PCR_TEST_API_KEY = os.getenv("PCR_TEST_API_KEY")
+PCR_PROD_API_KEY = os.getenv("PCR_PROD_API_KEY")
+
+PCR_TEST_URL = (
+    f"https://pcr360-test.utk.pcr-360.com/api/"
+    f"{PCR_TEST_API_KEY}/servicedesk.json"
+)
+
+PCR_PROD_URL = (
+    f"https://pcr360.utk.pcr-360.com/api/"
+    f"{PCR_PROD_API_KEY}/servicedesk.json"
+)
 
 URL = (
     f"https://pcr360-test.utk.pcr-360.com/"
@@ -56,7 +68,7 @@ def create_service_order():
     }
 
     response = requests.post(
-        URL,
+        PCR_TEST_URL,
         headers=HEADERS,
         json=payload
     )
@@ -77,7 +89,26 @@ def create_service_request(description, remarks):
     }
 
     response = requests.post(
-        URL,
+        PCR_TEST_URL,
+        headers=HEADERS,
+        json=payload
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+def create_inquiry(description, remarks):
+
+    payload = {
+        "type": "IQ",
+        "csr": 1,
+        "description": description,
+        "remarks": remarks
+    }
+
+    response = requests.post(
+        PCR_TEST_URL,
         headers=HEADERS,
         json=payload
     )
@@ -96,7 +127,7 @@ def add_equipment(so_number):
     }
 
     response = requests.post(
-        URL,
+        PCR_TEST_URL,
         headers=HEADERS,
         json=payload
     )

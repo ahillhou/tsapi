@@ -4,9 +4,11 @@ import json
 from fastapi import FastAPI, Request
 from app.tdx import get_ticket
 from app.tdx import build_service_request_remarks
+from app.tdx import build_pcr_access_request_remarks
 from app.tdx import get_attribute
 from app.pcr import create_service_order
 from app.pcr import create_service_request
+from app.pcr import create_inquiry
 from app.pcr import add_equipment
 from app.processor import process_ringcentral_ticket
 from .ring_test import set_dnd
@@ -73,22 +75,58 @@ def test_so():
 #     }
 
 #TDX RC form -> PCR360 as Service Request
+# @app.post("/tdx/webhook")
+# def ringcentral_request(payload: dict):
+
+#     ticket = payload["data"]
+
+#     remarks = build_service_request_remarks(ticket)
+
+#     result = create_service_request(
+#         description=ticket["Title"],
+#         remarks=remarks
+#     )
+
+#     return {
+#         "status": "processed",
+#         "service_request": result
+#     }
+
+#TDX RC form -> PCR360 as Service Request (DEMO TEST VERSION)
 @app.post("/tdx/webhook")
-def ringcentral_request(payload: dict):
+def account_creation_request(payload: dict):
 
     ticket = payload["data"]
 
     remarks = build_service_request_remarks(ticket)
 
-    result = create_service_request(
+    result = create_inquiry(
         description=ticket["Title"],
         remarks=remarks
     )
 
     return {
         "status": "processed",
-        "service_request": result
+        "inquiry": result
     }
+
+# #TDX RC form -> PCR360 as Service Request
+# @app.post("/tdx/webhook/access_request")
+# def account_creation_request(payload: dict):
+
+#     ticket = payload["data"]
+
+#     remarks = build_pcr_access_request_remarks(ticket)
+
+#     result = create_inquiry(
+#         description=ticket["Title"],
+#         remarks=remarks
+#     )
+
+#     return {
+#         "status": "processed",
+#         "inquiry": result
+#     }
 
 @app.post("/ringcentral/dayoff")
 async def dayoff_webhook(request: Request):
