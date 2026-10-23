@@ -101,8 +101,6 @@ def build_service_request_remarks(ticket):
 def build_access_request_remarks(ticket):
 
     remarks = (
-        f"Requestor: {ticket['RequestorName']}<br><br>"
-        f"Email: {ticket['RequestorEmail']}<br><br>"
         f"Title: {ticket['Title']}<br><br>"
         f"Access Change: {get_attribute(ticket, 'What access change do you need for PCR?')}<br><br>"
     )

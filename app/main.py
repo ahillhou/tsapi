@@ -136,6 +136,12 @@ def account_creation_request(payload: dict):
 @app.post("/tdx/webhook/access_request")
 def account_creation_request(payload: dict):
 
+    print("=" * 80)
+    print("RAW PAYLOAD")
+    print("=" * 80)
+    print(json.dumps(payload, indent=4))
+    print("=" * 80)
+
     ticket = payload["data"]
 
     print("=" * 50)
