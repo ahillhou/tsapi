@@ -1,6 +1,7 @@
 import requests
 #from dotenv import load_dotenv
 import os
+import base64
 
 PCR_API_KEY = os.getenv("PCR_API_KEY")
 PCR_TEST_API_KEY = os.getenv("PCR_TEST_API_KEY")
@@ -118,6 +119,7 @@ def create_inquiry(subject, message, email, topic):
     print("Response:", response.text)
 
     response.raise_for_status()
+    return response.json()
 
 def add_equipment(so_number):
 
@@ -137,6 +139,38 @@ def add_equipment(so_number):
     print("Equipment Status:", response.status_code)
 
     print("Equipment Response:", response.text)
+
+    response.raise_for_status()
+
+    return response.json()
+
+def upload_attachment(
+    sd_number,
+    filename,
+    file_content
+):
+
+    payload = {
+        "type": "ATTACHMENT",
+        "sd_number": sd_number,
+        "files": [
+            {
+                "filename": filename,
+                "data": base64.b64encode(
+                    file_content
+                ).decode("utf-8")
+            }
+        ]
+    }
+
+    response = requests.post(
+        URL,
+        headers=HEADERS,
+        json=payload
+    )
+
+    print("Attachment Status:", response.status_code)
+    print("Attachment Response:", response.text)
 
     response.raise_for_status()
 

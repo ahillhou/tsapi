@@ -6,10 +6,12 @@ from app.tdx import get_ticket
 from app.tdx import build_service_request_remarks
 from app.tdx import build_access_request_remarks
 from app.tdx import get_attribute
+from app.tdx import download_attachment
 from app.pcr import create_service_order
 from app.pcr import create_service_request
 from app.pcr import create_inquiry
 from app.pcr import add_equipment
+from app.pcr import upload_attachment
 from app.processor import process_ringcentral_ticket
 from .ring_test import set_dnd
 from app.services.nurse_dayoff_service import NurseDayOffService
@@ -136,11 +138,11 @@ def account_creation_request(payload: dict):
 @app.post("/tdx/webhook/access_request")
 def account_creation_request(payload: dict):
 
-    print("=" * 80)
-    print("RAW PAYLOAD")
-    print("=" * 80)
-    print(json.dumps(payload, indent=4))
-    print("=" * 80)
+    # print("=" * 80)
+    # print("RAW PAYLOAD")
+    # print("=" * 80)
+    # print(json.dumps(payload, indent=4))
+    # print("=" * 80)
 
     ticket = payload["data"]
 
@@ -163,9 +165,31 @@ def account_creation_request(payload: dict):
         subject = f"{access_change} PCR Access",
         message=remarks,
         email=ticket["RequestorEmail"],
-        topic=349
+        topic=349,
+        #topic=482   
     )
 
+    print(result)
+
+    #get service desk id#
+    iq_number = result["servicedesk"]
+
+    #download and upload attatchments
+    for attachment in ticket.get(
+        "Attachments",
+        []
+    ):
+
+        file_content = download_attachment(
+            attachment["ContentUri"]
+        )
+
+        upload_attachment(
+            sd_number=iq_number,
+            filename=attachment["Name"],
+            file_content=file_content
+        )
+    
     print("PCR Response:")
     print(result)
 
