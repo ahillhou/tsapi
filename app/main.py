@@ -154,8 +154,13 @@ def account_creation_request(payload: dict):
     print("Generated Remarks:")
     print(remarks)
 
+    access_change = get_attribute(
+        ticket,
+        "PCR Type"
+    )
+
     result = create_inquiry(
-        subject=ticket["Title"],
+        subject = f"{access_change} PCR Access",
         message=remarks,
         email=ticket["RequestorEmail"],
         topic=349
