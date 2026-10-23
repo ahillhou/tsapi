@@ -136,7 +136,7 @@ def build_access_request_remarks(ticket):
         )
 
     remarks += (
-        f"TDX Ticket: {ticket['WebUiUrl']}<br><br>"
+        f"TDX Ticket ID#: {ticket['ID']}<br><br>"
     )
 
     return remarks

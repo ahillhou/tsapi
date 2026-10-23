@@ -185,10 +185,12 @@ def upload_attachment(
 def lookup_sd(sd_number):
     response = requests.get(
         URL,
-        headers=HEADERS,
         params={
-            "TYPE": "IN",
-            "SD_NUMBER": sd_number
+            "SELECT": (
+                "SELECT RECID, SD_NUMBER "
+                f"FROM V_SERVICE_DESK "
+                f"WHERE SD_NUMBER = '{sd_number}'"
+            )
         }
     )
 
@@ -196,5 +198,4 @@ def lookup_sd(sd_number):
     print("LOOKUP RESPONSE:")
     print(response.text)
 
-    response.raise_for_status()
-    return response.json()
+    return response.text
