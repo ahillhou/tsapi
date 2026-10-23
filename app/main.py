@@ -144,6 +144,9 @@ def account_creation_request(payload: dict):
     # print(json.dumps(payload, indent=4))
     # print("=" * 80)
 
+    print("ATTACHMENT PAYLOAD:")
+    print(json.dumps(payload, indent=4)[:2000])
+
     ticket = payload["data"]
 
     print("=" * 50)
@@ -191,7 +194,7 @@ def account_creation_request(payload: dict):
         )
     
     print("PCR Response:")
-    print(result)
+    print(result["servicedesk"])
 
     print("=" * 50)
 
@@ -199,6 +202,19 @@ def account_creation_request(payload: dict):
         "status": "processed",
         "service_request": result
     }
+
+#test for attachments
+@app.post("/test_attachment")
+def test_attachment():
+
+    with open("test.txt", "rb") as f:
+        file_content = f.read()
+
+    return upload_attachment(
+        sd_number="IQ00000011",
+        filename="test.txt",
+        file_content=file_content
+    )
 
 @app.post("/ringcentral/dayoff")
 async def dayoff_webhook(request: Request):
