@@ -12,6 +12,7 @@ from app.pcr import create_service_request
 from app.pcr import create_inquiry
 from app.pcr import add_equipment
 from app.pcr import upload_attachment
+from app.pcr import lookup_sd
 from app.processor import process_ringcentral_ticket
 from .ring_test import set_dnd
 from app.services.nurse_dayoff_service import NurseDayOffService
@@ -176,6 +177,8 @@ def account_creation_request(payload: dict):
 
     #get service desk id#
     iq_number = result["servicedesk"]
+
+    lookup_sd(iq_number)
 
     #download and upload attatchments
     for attachment in ticket.get(

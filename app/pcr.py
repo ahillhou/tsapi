@@ -181,3 +181,20 @@ def upload_attachment(
     response.raise_for_status()
 
     return response.json()
+
+def lookup_sd(sd_number):
+    response = requests.get(
+        URL,
+        headers=HEADERS,
+        params={
+            "TYPE": "IN",
+            "SD_NUMBER": sd_number
+        }
+    )
+
+    print("LOOKUP STATUS:", response.status_code)
+    print("LOOKUP RESPONSE:")
+    print(response.text)
+
+    response.raise_for_status()
+    return response.json()
