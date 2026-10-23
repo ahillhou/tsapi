@@ -119,6 +119,7 @@ def create_inquiry(subject, message, email, topic):
     print("Response:", response.text)
 
     response.raise_for_status()
+    print(response.json())
     return response.json()
 
 def add_equipment(so_number):
@@ -178,7 +179,11 @@ def upload_attachment(
     print("Attachment Status:", response.status_code)
     print("Attachment Response:", response.text)
 
-    response.raise_for_status()
+    if response.status_code >= 400:
+        return {
+            "status": "error",
+            "response": response.text
+        }
 
     return response.json()
 
