@@ -133,7 +133,7 @@ def account_creation_request(payload: dict):
 #         "inquiry": result
 #     }
 
-@app.post("/tdx/webhook/account_creation_request")
+@app.post("/tdx/webhook/access_request")
 def account_creation_request(payload: dict):
 
     ticket = payload["data"]
@@ -149,8 +149,10 @@ def account_creation_request(payload: dict):
     print(remarks)
 
     result = create_inquiry(
-        description=ticket["Title"],
-        remarks=remarks
+        subject=ticket["Title"],
+        message=remarks,
+        email=ticket["RequestorEmail"],
+        topic=349
     )
 
     print("PCR Response:")
