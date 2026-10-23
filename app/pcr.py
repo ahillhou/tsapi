@@ -23,6 +23,16 @@ URL = (
     f"api/{PCR_API_KEY}/servicedesk.json"
 )
 
+PCR_TEST_SQL_URL = (
+    f"https://pcr360-test.utk.pcr-360.com/api/"
+    f"{PCR_TEST_API_KEY}/sql.json"
+)
+
+PCR_PROD_SQL_URL = (
+    f"https://pcr360.utk.pcr-360.com/api/"
+    f"{PCR_PROD_API_KEY}/sql.json"
+)
+
 HEADERS = {
     "Content-Type": "application/json",
     "Pcr-Html-Encoded": "TRUE"
@@ -207,7 +217,6 @@ def upload_attachment(
 #     return response.text
 
 def lookup_sd(sd_number):
-    SQL_URL = f"{URL}/sql.json"
 
     sql = (
         "SELECT RECID, SD_NUMBER "
@@ -216,7 +225,7 @@ def lookup_sd(sd_number):
     )
 
     response = requests.post(
-        SQL_URL,  # .../sql.json
+        PCR_TEST_SQL_URL,
         headers=HEADERS,
         json={
             "sql": sql
