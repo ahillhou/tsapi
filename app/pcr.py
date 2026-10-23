@@ -163,17 +163,18 @@ def upload_attachment(
         ]
     }
 
+    print("ATTACHMENT PAYLOAD:")
+    print(payload)
+    print("SD Number:", sd_number)
+    print("Filename:", filename)
+    print("File Size:", len(file_content))
+
     response = requests.post(
         URL,
         headers=HEADERS,
         json=payload
     )
 
-    print("ATTACHMENT PAYLOAD:")
-    print(payload)
-    print("SD Number:", sd_number)
-    print("Filename:", filename)
-    print("File Size:", len(file_content))
     print("Attachment Status:", response.status_code)
     print("Attachment Response:", response.text)
 
