@@ -2,6 +2,7 @@ import requests
 #from dotenv import load_dotenv
 import os
 import base64
+import json
 
 PCR_API_KEY = os.getenv("PCR_API_KEY")
 PCR_TEST_API_KEY = os.getenv("PCR_TEST_API_KEY")
@@ -165,7 +166,7 @@ def upload_attachment(
     }
 
     print("ATTACHMENT PAYLOAD:")
-    print(payload)
+    print(json.dumps(payload, indent=2)[:5000])
     print("SD Number:", sd_number)
     print("Filename:", filename)
     print("File Size:", len(file_content))
@@ -193,7 +194,7 @@ def lookup_sd(sd_number):
         params={
             "SELECT": (
                 "SELECT RECID, SD_NUMBER "
-                f"FROM V_SERVICE_DESK "
+                f"FROM SERVICE_DESK "
                 f"WHERE SD_NUMBER = '{sd_number}'"
             )
         }
