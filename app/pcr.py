@@ -188,20 +188,45 @@ def upload_attachment(
 
     return response.json()
 
+# def lookup_sd(sd_number):
+#     response = requests.get(
+#         URL,
+#         params={
+#             "SELECT": (
+#                 "SELECT RECID, SD_NUMBER "
+#                 f"FROM SERVICE_DESK "
+#                 f"WHERE SD_NUMBER = '{sd_number}'"
+#             )
+#         }
+#     )
+
+#     print("LOOKUP STATUS:", response.status_code)
+#     print("LOOKUP RESPONSE:")
+#     print(response.text)
+
+#     return response.text
+
 def lookup_sd(sd_number):
-    response = requests.get(
-        URL,
-        params={
-            "SELECT": (
-                "SELECT RECID, SD_NUMBER "
-                f"FROM SERVICE_DESK "
-                f"WHERE SD_NUMBER = '{sd_number}'"
-            )
+    SQL_URL = f"{URL}/sql.json"
+
+    sql = (
+        "SELECT RECID, SD_NUMBER "
+        "FROM SERVICE_DESK "
+        f"WHERE SD_NUMBER = '{sd_number}'"
+    )
+
+    response = requests.post(
+        SQL_URL,  # .../sql.json
+        headers=HEADERS,
+        json={
+            "sql": sql
         }
     )
 
     print("LOOKUP STATUS:", response.status_code)
+    print("SQL:")
+    print(sql)
     print("LOOKUP RESPONSE:")
     print(response.text)
 
-    return response.text
+    return response.json()
