@@ -129,6 +129,16 @@ def build_access_request_remarks(ticket):
             f"Users to Remove: {users_to_remove}<br><br>"
         )
 
+    billing_account = get_attribute(
+        ticket,
+        "Billing Account Number"
+    )
+
+    if billing_account:
+        remarks += (
+            f"Billing Account Number: {billing_account}<br><br>"
+        )
+
     for attachment in ticket.get("Attachments", []):
 
         remarks += (
