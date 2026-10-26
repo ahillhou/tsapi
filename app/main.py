@@ -240,8 +240,8 @@ def test_account_creation_request(payload: dict):
         subject = f"{access_change} PCR Access",
         message=remarks,
         email=ticket["RequestorEmail"],
-        #topic=349,
-        topic=482,
+        topic=349,
+        #topic=482,
     )
 
     print(result)
