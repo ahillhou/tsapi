@@ -248,6 +248,8 @@ def test_account_creation_request(payload: dict):
 
     #get service desk id#
     iq_number = result["servicedesk"]
+    print("IQNUMBER:")
+    print(iq_number)
 
     #lookup_sd(iq_number)
 
@@ -262,7 +264,7 @@ def test_account_creation_request(payload: dict):
         )
 
         upload_attachment(
-            sd_number=iq_number,
+            sd_number=57,
             filename=attachment["Name"],
             file_content=file_content
         )
