@@ -143,7 +143,7 @@ def add_equipment(so_number):
     }
 
     response = requests.post(
-        PCR_TEST_URL,
+        URL,
         headers=HEADERS,
         json=payload
     )
@@ -182,7 +182,7 @@ def upload_attachment(
     print("File Size:", len(file_content))
 
     response = requests.post(
-        URL,
+        PCR_PROD_URL,
         headers=HEADERS,
         json=payload
     )

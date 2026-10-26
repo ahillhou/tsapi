@@ -145,8 +145,8 @@ def account_creation_request(payload: dict):
     # print(json.dumps(payload, indent=4))
     # print("=" * 80)
 
-    print("ATTACHMENT PAYLOAD:")
-    print(json.dumps(payload, indent=4)[:2000])
+    # print("ATTACHMENT PAYLOAD:")
+    # print(json.dumps(payload, indent=4)[:2000])
 
     ticket = payload["data"]
 
@@ -176,25 +176,25 @@ def account_creation_request(payload: dict):
     print(result)
 
     #get service desk id#
-    iq_number = result["servicedesk"]
+    # iq_number = result["servicedesk"]
 
-    lookup_sd(iq_number)
+    # lookup_sd(iq_number)
 
     #download and upload attatchments
-    for attachment in ticket.get(
-        "Attachments",
-        []
-    ):
+    # for attachment in ticket.get(
+    #     "Attachments",
+    #     []
+    # ):
 
-        file_content = download_attachment(
-            attachment["ContentUri"]
-        )
+    #     file_content = download_attachment(
+    #         attachment["ContentUri"]
+    #     )
 
-        upload_attachment(
-            sd_number=iq_number,
-            filename=attachment["Name"],
-            file_content=file_content
-        )
+    #     upload_attachment(
+    #         sd_number=iq_number,
+    #         filename=attachment["Name"],
+    #         file_content=file_content
+    #     )
     
     print("PCR Response:")
     print(result["servicedesk"])
