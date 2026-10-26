@@ -121,7 +121,7 @@ def create_inquiry(subject, message, email, topic):
     }
 
     response = requests.post(
-        URL,
+        PCR_PROD_URL,
         headers=HEADERS,
         json=payload
     )
