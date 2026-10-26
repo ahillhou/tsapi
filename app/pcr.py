@@ -118,6 +118,8 @@ def create_inquiry(subject, message, email, topic):
         "subject": subject,
         "message": message,
         "topic": topic,
+        "sdc": 6,
+        "csr": 566
     }
 
     response = requests.post(
