@@ -143,12 +143,10 @@ def test_create_inquiry(subject, message, email, topic):
         "subject": subject,
         "message": message,
         "topic": topic,
-        "sdc": 6,
-        "csr": 566
     }
 
     response = requests.post(
-        PCR_PROD_URL,
+        PCR_TEST_URL,
         headers=HEADERS,
         json=payload
     )
@@ -191,7 +189,7 @@ def upload_attachment(
 
     payload = {
         "type": "ATTACHMENT",
-        "sd_number": sd_number,
+        "sd_recid": sd_number,
         "files": [
             {
                 "filename": filename,
@@ -207,7 +205,7 @@ def upload_attachment(
     print("File Size:", len(file_content))
 
     response = requests.post(
-        PCR_PROD_URL,
+        PCR_TEST_URL,
         headers=HEADERS,
         json=payload
     )
