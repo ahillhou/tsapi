@@ -117,7 +117,32 @@ def create_inquiry(subject, message, email, topic):
         "email": email,
         "subject": subject,
         "message": message,
-        "topic": topic
+        "topic": topic,
+    }
+
+    response = requests.post(
+        PCR_PROD_URL,
+        headers=HEADERS,
+        json=payload
+    )
+
+    print("Status:", response.status_code)
+    print("Response:", response.text)
+
+    response.raise_for_status()
+    print(response.json())
+    return response.json()
+
+def test_create_inquiry(subject, message, email, topic):
+
+    payload = {
+        "type": "IQ",
+        "email": email,
+        "subject": subject,
+        "message": message,
+        "topic": topic,
+        "sdc": 6,
+        "csr": 566
     }
 
     response = requests.post(
@@ -168,9 +193,7 @@ def upload_attachment(
         "files": [
             {
                 "filename": filename,
-                "data": base64.b64encode(
-                    file_content
-                ).decode("utf-8")
+                "data": base64.b64encode(file_content).decode("utf-8")
             }
         ]
     }

@@ -10,6 +10,7 @@ from app.tdx import download_attachment
 from app.pcr import create_service_order
 from app.pcr import create_service_request
 from app.pcr import create_inquiry
+from app.pcr import test_create_inquiry
 from app.pcr import add_equipment
 from app.pcr import upload_attachment
 from app.pcr import lookup_sd
@@ -166,6 +167,76 @@ def account_creation_request(payload: dict):
     )
 
     result = create_inquiry(
+        subject = f"{access_change} PCR Access",
+        message=remarks,
+        email=ticket["RequestorEmail"],
+        #topic=349,
+        topic=482,
+    )
+
+    print(result)
+
+    #get service desk id#
+    # iq_number = result["servicedesk"]
+
+    # lookup_sd(iq_number)
+
+    #download and upload attatchments
+    # for attachment in ticket.get(
+    #     "Attachments",
+    #     []
+    # ):
+
+    #     file_content = download_attachment(
+    #         attachment["ContentUri"]
+    #     )
+
+    #     upload_attachment(
+    #         sd_number=iq_number,
+    #         filename=attachment["Name"],
+    #         file_content=file_content
+    #     )
+    
+    print("PCR Response:")
+    print(result["servicedesk"])
+
+    print("=" * 50)
+
+    return {
+        "status": "processed",
+        "service_request": result
+    }
+
+@app.post("/tdx/webhook/test_access_request")
+def test_account_creation_request(payload: dict):
+
+    # print("=" * 80)
+    # print("RAW PAYLOAD")
+    # print("=" * 80)
+    # print(json.dumps(payload, indent=4))
+    # print("=" * 80)
+
+    # print("ATTACHMENT PAYLOAD:")
+    # print(json.dumps(payload, indent=4)[:2000])
+
+    ticket = payload["data"]
+
+    print("=" * 50)
+    print("PCR Access Request Received")
+    print(f"Ticket ID: {ticket['ID']}")
+    print(f"Title: {ticket['Title']}")
+
+    remarks = build_access_request_remarks(ticket)
+
+    print("Generated Remarks:")
+    print(remarks)
+
+    access_change = get_attribute(
+        ticket,
+        "PCR Type"
+    )
+
+    result = test_create_inquiry(
         subject = f"{access_change} PCR Access",
         message=remarks,
         email=ticket["RequestorEmail"],
