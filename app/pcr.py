@@ -122,6 +122,10 @@ def create_inquiry(subject, message, email, topic):
         "csr": 566
     }
 
+    print("EMAIL SENT TO PCR:", email)
+    print("PAYLOAD:")
+    print(json.dumps(payload, indent=2))
+
     response = requests.post(
         PCR_PROD_URL,
         headers=HEADERS,

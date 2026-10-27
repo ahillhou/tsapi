@@ -166,10 +166,24 @@ def account_creation_request(payload: dict):
         "PCR Type"
     )
 
+    print("RequestorEmail:", repr(ticket.get("RequestorEmail")))
+
+    requestor_email = ticket["RequestorEmail"]
+
+    if not requestor_email or "@" not in requestor_email:
+        remarks += (
+        "WARNING: Invalid RequestorEmail received from TDX. "
+        "PCR was submitted using fallback email "
+        "ahillhou@utk.edu.<br><br>"
+        )
+
+        requestor_email = "ahillhou@utk.edu"
+
     result = create_inquiry(
         subject = f"{access_change} PCR Access",
         message=remarks,
-        email=ticket["RequestorEmail"],
+        #email=ticket["RequestorEmail"],
+        email = requestor_email,
         #topic=349,
         topic=482,
     )
