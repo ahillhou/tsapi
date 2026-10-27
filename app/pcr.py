@@ -240,25 +240,13 @@ def upload_attachment(
 #     return response.text
 
 def lookup_sd(sd_number):
-
-    sql = (
-        "SELECT RECID, SD_NUMBER "
-        "FROM SERVICE_DESK "
-        f"WHERE SD_NUMBER = '{sd_number}'"
-    )
-
-    response = requests.post(
-        PCR_TEST_SQL_URL,
-        headers=HEADERS,
-        json={
-            "sql": sql
+    response = requests.get(
+        PCR_TEST_URL,
+        params={
+            "SEARCH": sd_number
         }
     )
 
-    print("LOOKUP STATUS:", response.status_code)
-    print("SQL:")
-    print(sql)
-    print("LOOKUP RESPONSE:")
     print(response.text)
 
     return response.json()
