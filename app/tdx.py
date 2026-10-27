@@ -142,6 +142,14 @@ def build_access_request_remarks(ticket):
         )
 
     remarks += (
+        f"Requestor Name: {ticket['RequestorName']}<br><br>"
+    )
+
+    remarks += (
+        f"Requestor Email: {ticket['RequestorEmail']}<br><br>"
+    )
+
+    remarks += (
         f"TDX Ticket ID#: {ticket['ID']}<br><br>"
     )
 

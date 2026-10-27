@@ -135,7 +135,14 @@ def create_inquiry(subject, message, email, topic):
     print("Status:", response.status_code)
     print("Response:", response.text)
 
-    response.raise_for_status()
+    if response.status_code >= 400:
+        print("Status:", response.status_code)
+        print("Response:", response.text)
+        return {
+            "status": "error",
+            "response": response.text,
+        }
+
     print(response.json())
     return response.json()
 
