@@ -7,6 +7,7 @@ from app.tdx import build_service_request_remarks
 from app.tdx import build_access_request_remarks
 from app.tdx import get_attribute
 from app.tdx import download_attachment
+from app.tdx import create_ringcentral_request
 from app.pcr import create_service_order
 from app.pcr import create_service_request
 from app.pcr import create_inquiry
@@ -96,25 +97,54 @@ def test_so():
 #         "service_request": result
 #     }
 
+# #TDX RC form -> PCR360 as Service Request (DEMO TEST VERSION)
+# @app.post("/tdx/webhook")
+# def account_creation_request(payload: dict):
+
+#     ticket = payload["data"]
+
+#     #remarks = build_service_request_remarks(ticket)
+#     remarks = "test"
+
+#     result = create_inquiry(
+#         subject=ticket["Title"],
+#         message=remarks,
+#         email=ticket["RequestorEmail"],
+#         topic=349
+#     )
+
+#     return {
+#         "status": "processed",
+#         "inquiry": result
+#     }
+
 #TDX RC form -> PCR360 as Service Request (DEMO TEST VERSION)
 @app.post("/tdx/webhook")
 def account_creation_request(payload: dict):
 
-    ticket = payload["data"]
+    print("=" * 50)
+    print("TDX WEBHOOK RECEIVED")
+    print(payload)
 
-    #remarks = build_service_request_remarks(ticket)
-    remarks = "test"
+    ticket_id = payload.get("ID")
 
-    result = create_inquiry(
-        subject=ticket["Title"],
-        message=remarks,
-        email=ticket["RequestorEmail"],
-        topic=349
-    )
+    if not ticket_id:
+        return {
+            "status": "error",
+            "message": "No ticket ID received"
+        }
+
+    ticket = get_ticket(ticket_id)
+
+    print("=" * 50)
+    print("FULL TICKET")
+    print(ticket)
+
+    result = create_ringcentral_request(ticket)
 
     return {
-        "status": "processed",
-        "inquiry": result
+        "status": "success",
+        "result": result
     }
 
 # #test this first

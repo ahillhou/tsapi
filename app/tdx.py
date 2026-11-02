@@ -98,6 +98,8 @@ def build_service_request_remarks(ticket):
 
     return remarks
 
+#PRODUCTION
+#PCR account access request
 def build_access_request_remarks(ticket):
 
     access_change = get_attribute(
@@ -167,3 +169,17 @@ def download_attachment(content_uri):
     response.raise_for_status()
 
     return response.content
+
+#TEST
+#ring central request
+def create_ringcentral_request(ticket):
+
+    print("=" * 50)
+    print("PROCESSING RINGCENTRAL REQUEST")
+
+    attributes = ticket.get("Attributes", [])
+
+    for attribute in attributes:
+        print(attribute)
+
+    return "RingCentral request processed"
