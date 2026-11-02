@@ -7,7 +7,7 @@ from app.tdx import build_service_request_remarks
 from app.tdx import build_access_request_remarks
 from app.tdx import get_attribute
 from app.tdx import download_attachment
-from app.tdx import create_ringcentral_request
+from app.tdx import build_ringcentral_request_remarks
 from app.pcr import create_service_order
 from app.pcr import create_service_request
 from app.pcr import create_inquiry
@@ -119,32 +119,33 @@ def test_so():
 #     }
 
 #TDX RC form -> PCR360 as Service Request (DEMO TEST VERSION)
-@app.post("/tdx/webhook")
-def account_creation_request(payload: dict):
+@app.post("/tdx/webhook/ringcentral_request")
+def ringcentral_request(payload: dict):
+
+    ticket = payload["data"]
 
     print("=" * 50)
-    print("TDX WEBHOOK RECEIVED")
-    print(payload)
+    print("RingCentral Request Received")
+    print(f"Ticket ID: {ticket['ID']}")
+    print(f"Title: {ticket['Title']}")
 
-    ticket_id = payload.get("ID")
+    remarks = build_ringcentral_request_remarks(ticket)
 
-    if not ticket_id:
-        return {
-            "status": "error",
-            "message": "No ticket ID received"
-        }
+    print("Generated Remarks:")
+    print(remarks)
 
-    ticket = get_ticket(ticket_id)
+    result = create_service_request(
+        description="RingCentral New Request",
+        remarks=remarks
+    )
+
+    print(result)
 
     print("=" * 50)
-    print("FULL TICKET")
-    print(ticket)
-
-    result = create_ringcentral_request(ticket)
 
     return {
-        "status": "success",
-        "result": result
+        "status": "processed",
+        "service_request": result
     }
 
 # #test this first

@@ -172,14 +172,135 @@ def download_attachment(content_uri):
 
 #TEST
 #ring central request
-def create_ringcentral_request(ticket):
+def build_ringcentral_request_remarks(ticket):
 
-    print("=" * 50)
-    print("PROCESSING RINGCENTRAL REQUEST")
+    extension_option = get_attribute(
+        ticket,
+        "RC Ext Options"
+    )
 
-    attributes = ticket.get("Attributes", [])
+    remarks = (
+        f"Extension Request: {extension_option}<br><br>"
+    )
 
-    for attribute in attributes:
-        print(attribute)
+    existing_extension = get_attribute(
+        ticket,
+        "RC Exist Ext"
+    )
 
-    return "RingCentral request processed"
+    if existing_extension:
+        remarks += (
+            f"Existing Extension: {existing_extension}<br><br>"
+        )
+
+    account_type = get_attribute(
+        ticket,
+        "RC Account Type"
+    )
+
+    remarks += (
+        f"Account Type: {account_type}<br><br>"
+    )
+
+    location = get_attribute(
+        ticket,
+        "RC Location"
+    )
+
+    remarks += (
+        f"Work Location: {location}<br><br>"
+    )
+
+    location_details = get_attribute(
+        ticket,
+        "RC Address"
+    )
+
+    if location_details:
+        remarks += (
+            f"Location Details: {location_details}<br><br>"
+        )
+
+    outbound_id = get_attribute(
+        ticket,
+        "RC Outbound ID"
+    )
+
+    remarks += (
+        f"Outbound Caller ID: {outbound_id}<br><br>"
+    )
+
+    outbound_other = get_attribute(
+        ticket,
+        "RC Outbound ID Other"
+    )
+
+    if outbound_other:
+        remarks += (
+            f"Alternate 4-XXXX Number: {outbound_other}<br><br>"
+        )
+
+    queue_option = get_attribute(
+        ticket,
+        "RC Queue Options"
+    )
+
+    remarks += (
+        f"Queue Required: {queue_option}<br><br>"
+    )
+
+    queue_list = get_attribute(
+        ticket,
+        "RC Queue Options List"
+    )
+
+    if queue_list:
+        remarks += (
+            f"Queue List: {queue_list}<br><br>"
+        )
+
+    handset = get_attribute(
+        ticket,
+        "RC Physical Handset"
+    )
+
+    remarks += (
+        f"Physical Desk Phone: {handset}<br><br>"
+    )
+
+    data_port = get_attribute(
+        ticket,
+        "RC Physical Handset Data Port"
+    )
+
+    if data_port:
+        remarks += (
+            f"Data Port: {data_port}<br><br>"
+        )
+
+    dash_coa = get_attribute(
+        ticket,
+        "RC DASH COA"
+    )
+
+    remarks += (
+        f"DASH COA: {dash_coa}<br><br>"
+    )
+
+    remarks += (
+        f"Description: {ticket['Description']}<br><br>"
+    )
+
+    remarks += (
+        f"Requestor Name: {ticket['RequestorName']}<br><br>"
+    )
+
+    remarks += (
+        f"Requestor Email: {ticket['RequestorEmail']}<br><br>"
+    )
+
+    remarks += (
+        f"TDX Ticket ID#: {ticket['ID']}<br><br>"
+    )
+
+    return remarks

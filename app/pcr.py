@@ -40,25 +40,6 @@ HEADERS = {
 
 VVX_150 = 889
 
-# def create_service_order():
-
-#     payload = {
-#         "type": "SO",
-#         "csr": 1,
-#         "description": "New Voice Request",
-#         "remarks": "Test Order"
-#     }
-
-#     response = requests.post(
-#         URL,
-#         headers=HEADERS,
-#         json=payload
-#     )
-
-#     response.raise_for_status()
-
-#     return response.json()
-
 def create_service_order():
 
 
@@ -231,24 +212,6 @@ def upload_attachment(
         }
 
     return response.json()
-
-# def lookup_sd(sd_number):
-#     response = requests.get(
-#         URL,
-#         params={
-#             "SELECT": (
-#                 "SELECT RECID, SD_NUMBER "
-#                 f"FROM SERVICE_DESK "
-#                 f"WHERE SD_NUMBER = '{sd_number}'"
-#             )
-#         }
-#     )
-
-#     print("LOOKUP STATUS:", response.status_code)
-#     print("LOOKUP RESPONSE:")
-#     print(response.text)
-
-#     return response.text
 
 def lookup_sd(sd_number):
     response = requests.get(
