@@ -181,7 +181,7 @@ def upload_attachment(
 
     payload = {
         "type": "ATTACHMENT",
-        "sd_recid": sd_number,
+        "sd_number": sd_number,
         "files": [
             {
                 "filename": filename,
