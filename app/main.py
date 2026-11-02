@@ -119,7 +119,7 @@ def test_so():
 #     }
 
 #TDX RC form -> PCR360 as Service Request (DEMO TEST VERSION)
-@app.post("/tdx/webhook/ringcentral_request")
+@app.post("/tdx/webhook")
 def ringcentral_request(payload: dict):
 
     ticket = payload["data"]
