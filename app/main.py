@@ -124,6 +124,12 @@ def ringcentral_request(payload: dict):
 
     ticket = payload["data"]
 
+    #error checking for attachments
+    print("=" * 50)
+    print("ATTACHMENT COUNT")
+    print(len(ticket.get("Attachments", [])))
+    print("=" * 50)
+
     print("=" * 50)
     print("RingCentral Request Received")
     print(f"Ticket ID: {ticket['ID']}")
