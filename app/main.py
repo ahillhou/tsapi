@@ -139,6 +139,25 @@ def ringcentral_request(payload: dict):
         remarks=remarks
     )
 
+    sr_number = result["servicedesk"]
+    print("PCR SR NUMBER:", sr_number)
+
+    for attachment in ticket.get("Attachments", []):
+
+        print("Processing Attachment:", attachment["Name"])
+
+        file_content = download_attachment(
+            attachment["ContentUri"]
+        )
+
+        upload_result = upload_attachment(
+            sd_number=sr_number,
+            filename=attachment["Name"],
+            file_content=file_content
+        )
+
+        print(upload_result)
+
     print(result)
 
     print("=" * 50)
