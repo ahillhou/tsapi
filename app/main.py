@@ -442,10 +442,21 @@ async def demo_dayoff(request: Request):
 
     body = await request.body()
 
-    print("RAW BODY:")
-    print(body.decode("utf-8"))
+    body_str = body.decode("utf-8")
+    body_str = body_str.replace("\u00A0", " ")
 
-    return {"status": "debug"}
+    print(body_str)
+
+    data = json.loads(body_str)
+
+    data = {
+        k: v.strip() if isinstance(v, str) else v
+        for k, v in data.items()
+    }
+
+    print("COMMAND:", data["command"])
+    print("EXTENSION:", data["extensionId"])
+    print("SENDER:", data["sender"])
 
     platform = get_platform()
 
