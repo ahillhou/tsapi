@@ -26,6 +26,13 @@ def get_extension_by_number(
 
         page += 1
 
+def get_extension(platform, extension_id):
+    response = platform.get(
+        f"/restapi/v1.0/account/~/extension/{extension_id}"
+    )
+
+    return response.json_dict()
+
 
 def is_student_health_staff(extension):
     department = (

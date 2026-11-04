@@ -19,6 +19,7 @@ from app.processor import process_ringcentral_ticket
 from .ring_test import set_dnd
 from app.services.nurse_dayoff_service import NurseDayOffService
 from app.integrations.ringcentral.auth import get_platform
+from app.integrations.ringcentral.sms import send_sms
 
 
 app = FastAPI()
@@ -408,25 +409,54 @@ async def webhook(request: Request):
         "command": command
     }
 
+# @app.post("/demo/dayoff")
+# async def demo_dayoff(request: Request):
+
+#     body = await request.body()
+
+#     body_str = body.decode("utf-8")
+#     body_str = body_str.replace("\u00A0", " ")
+
+#     data = json.loads(body_str)
+
+#     command = data["command"].strip().upper()
+
+#     platform = get_platform()
+
+#     service = NurseDayOffService(platform)
+
+#     result = service.handle_extension_command(
+#         "1017318040",
+#         command
+#     )
+
+#     return {
+#         "status": "success",
+#         "message": result
+#     }
+
 @app.post("/demo/dayoff")
 async def demo_dayoff(request: Request):
 
-    body = await request.body()
-
-    body_str = body.decode("utf-8")
-    body_str = body_str.replace("\u00A0", " ")
-
-    data = json.loads(body_str)
-
-    command = data["command"].strip().upper()
+    data = await request.json()
 
     platform = get_platform()
 
-    service = NurseDayOffService(platform)
+    service = NurseDayOffService(
+        platform
+    )
 
-    result = service.handle_extension_command(
-        "1017318040",
-        command
+    result = service.handle(
+        {
+            "id": data["extensionId"]
+        },
+        data["command"]
+    )
+
+    send_sms(
+        platform,
+        data["sender"],
+        result
     )
 
     return {
