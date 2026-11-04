@@ -438,7 +438,14 @@ async def webhook(request: Request):
 @app.post("/demo/dayoff")
 async def demo_dayoff(request: Request):
 
-    data = await request.json()
+    #data = await request.json()
+
+    body = await request.body()
+
+    print("RAW BODY:")
+    print(body.decode("utf-8"))
+
+    return {"status": "debug"}
 
     platform = get_platform()
 
