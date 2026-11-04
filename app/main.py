@@ -464,18 +464,15 @@ async def demo_dayoff(request: Request):
         platform
     )
 
-    result = service.handle(
-        {
-            "id": data["extensionId"]
-        },
-        data["command"]
-    )
-
-    send_sms(
-        platform,
-        data["sender"],
-        result
-    )
+    try:
+        send_sms(
+            platform,
+            data["sender"],
+            result
+        )
+    except Exception as e:
+        print("SMS failed:")
+        print(e)
 
     return {
         "status": "success",
