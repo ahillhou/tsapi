@@ -42,32 +42,23 @@ class NurseDayOffService:
         #
         if not target_extension_number:
 
-            extension = {
-                "id": sender_extension["id"]
-            }
-
-        #
-        # Manager command
-        #
-        # else:
-        #     extension = get_extension_by_number(
-        #         self.platform,
-        #         target_extension_number
-        #     )
-        else:
             extension = get_extension(
                 self.platform,
                 sender_extension["id"]
             )
 
+        #
+        # Manager command
+        #
+        else:
+
+            extension = get_extension_by_number(
+                self.platform,
+                target_extension_number
+            )
+
         if not extension:
             return "Extension not found."
-        
-        # if not is_student_health_staff(extension):
-        #     return (
-        #         "Extension is not assigned to "
-        #         "Student Health Staff."
-        #     )
 
         rule = find_dayoff_rule(
             self.platform,
@@ -96,38 +87,6 @@ class NurseDayOffService:
             f"{'enabled' if enabled else 'disabled'} "
             f"for {extension['name']}."
         )
-        # if command == "DAYOFF":
-
-        #     update_interaction_rule(
-        #         self.platform,
-        #         extension["id"],
-        #         rule["id"],
-        #         True
-        #     )
-
-        #     return (
-        #         f"Day Off enabled for "
-        #         f"{extension['name']}"
-        #     )
-
-        # if command == "BACK":
-
-        #     update_interaction_rule(
-        #         self.platform,
-        #         extension["id"],
-        #         rule["id"],
-        #         False
-        #     )
-
-        #     return (
-        #         f"Day Off disabled for "
-        #         f"{extension['name']}"
-        #     )
-
-        # return (
-        #     "Unknown command. "
-        #     "Use DAYOFF or BACK."
-        # )
 
     def handle_extension_command(
         self,
