@@ -23,7 +23,8 @@ def find_dayoff_rule(platform, extension_id):
     for rule in rules.get("records", []):
         rule_name = rule.get("displayName", "").lower()
 
-        if rule_name == "student health staff admin closing template":
+        #student health staff admin closing template
+        if rule_name == "nurses out of office custom rule":
             return rule
 
     return None
