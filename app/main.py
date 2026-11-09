@@ -2,6 +2,7 @@ import os
 import json
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from app.tdx import get_ticket
 from app.tdx import build_service_request_remarks
 from app.tdx import build_access_request_remarks
@@ -359,7 +360,7 @@ async def dayoff_webhook(request: Request):
 
     service = NurseDayOffService()
 
-    result = service.handle(data)
+    result = await run_in_threadpool(service.handle, data)
 
     return {
         "status": "success",
@@ -389,7 +390,7 @@ async def webhook(request: Request):
     print(f"Extension ID: {extension_id}")
 
     if command == "DAYOFF":
-        set_dnd(extension_id, True)
+        await run_in_threadpool(set_dnd, extension_id, True)
 
         return {
             "status": "success",
@@ -397,7 +398,7 @@ async def webhook(request: Request):
         }
 
     elif command == "BACK":
-        set_dnd(extension_id, False)
+        await run_in_threadpool(set_dnd, extension_id, False)
 
         return {
             "status": "success",
@@ -458,13 +459,16 @@ async def demo_dayoff(request: Request):
     print("EXTENSION:", data["extensionId"])
     print("SENDER:", data["sender"])
 
-    platform = get_platform()
+    # RingCentral SDK calls are blocking; run them in a worker thread so
+    # they don't stall other requests (e.g. TDX webhooks) on the event loop.
+    platform = await run_in_threadpool(get_platform)
 
     service = NurseDayOffService(
         platform
     )
 
-    result = service.handle(
+    result = await run_in_threadpool(
+        service.handle,
         {
             "id": data["extensionId"]
         },
@@ -474,7 +478,8 @@ async def demo_dayoff(request: Request):
     print("RESULT:", result)
 
     try:
-        send_sms(
+        await run_in_threadpool(
+            send_sms,
             platform,
             data["sender"],
             result
