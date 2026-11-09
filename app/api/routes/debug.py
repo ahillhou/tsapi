@@ -1,6 +1,8 @@
 """
 Manual testing endpoints. Not called by TDX or RingCentral.
 
+Only mounted when ENABLE_DEBUG_ROUTES=true (see app/main.py).
+
 Most of these talk to PCR360 test; /ticket and /test-fields read live
 TDX tickets.
 """

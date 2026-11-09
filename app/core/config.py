@@ -39,6 +39,17 @@ class Settings:
     rc_jwt_token: str | None
     rc_sms_from_number: str
 
+    # Webhook security (see app/core/security.py)
+    tdx_webhook_secret: str | None
+    ringcentral_webhook_secret: str | None
+
+    # Manual testing routes in app/api/routes/debug.py
+    enable_debug_routes: bool
+
+
+def _env_bool(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -59,4 +70,7 @@ def get_settings() -> Settings:
         rc_client_secret=os.getenv("RC_CLIENT_SECRET"),
         rc_jwt_token=os.getenv("RC_JWT_TOKEN"),
         rc_sms_from_number="+18659749955",
+        tdx_webhook_secret=os.getenv("TDX_WEBHOOK_SECRET") or None,
+        ringcentral_webhook_secret=os.getenv("RINGCENTRAL_WEBHOOK_SECRET") or None,
+        enable_debug_routes=_env_bool("ENABLE_DEBUG_ROUTES"),
     )

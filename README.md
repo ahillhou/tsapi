@@ -12,7 +12,27 @@ Runs in Docker on port 8000 behind the university VIP (VPN only).
 | `POST /demo/dayoff` | RingCentral SMS workflow | Toggles a nurse's out-of-office call rule, texts back the result |
 | `POST /ringcentral/dnd` | RingCentral workflow | Turns Do Not Disturb on/off |
 
-Manual testing routes are in `app/api/routes/debug.py`.
+Manual testing routes are in `app/api/routes/debug.py`. They are only
+available when `ENABLE_DEBUG_ROUTES=true`.
+
+## Webhook security
+
+TDX and RingCentral each have their own shared secret, sent in the
+`X-Webhook-Secret` header (or `?key=<secret>` on the URL if a platform
+can't set headers; the header is better because URLs are logged).
+A wrong or missing secret gets `401` and nothing is sent to PCR360 or
+RingCentral.
+
+If a secret isn't set, that caller's routes stay open and a warning is
+logged at startup. To turn a secret on without breaking anything:
+
+1. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+2. Configure the caller (the TDX web service or the RingCentral workflow)
+   to send the `X-Webhook-Secret` header with that value.
+3. Add it to `app/.env` (`TDX_WEBHOOK_SECRET=` or
+   `RINGCENTRAL_WEBHOOK_SECRET=`) and run `./deploy.sh`.
+4. Submit a test form or text, and check `docker logs` for
+   "Rejected ... webhook".
 
 ## Layout
 
@@ -37,7 +57,8 @@ and are passed with `docker run --env-file app/.env`:
 
 `USERNAME`, `PASSWORD` (TDX), `PCR_API_KEY`, `PCR_TEST_API_KEY`,
 `PCR_PROD_API_KEY`, `RC_CLIENT_ID`, `RC_CLIENT_SECRET`, `RC_JWT_TOKEN`.
-Optional: `LOG_LEVEL` (default `INFO`).
+Optional: `TDX_WEBHOOK_SECRET`, `RINGCENTRAL_WEBHOOK_SECRET`,
+`ENABLE_DEBUG_ROUTES` (default off), `LOG_LEVEL` (default `INFO`).
 
 ## Running locally
 

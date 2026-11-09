@@ -1,6 +1,8 @@
 """Webhooks called by TDX form workflows."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.security import tdx_webhook
 
 from app.schemas.tdx import TDXWebhook
 from app.services.pcr_access_request import (
@@ -9,7 +11,11 @@ from app.services.pcr_access_request import (
 )
 from app.services.ringcentral_request import submit_ringcentral_request
 
-router = APIRouter(prefix="/tdx", tags=["tdx"])
+router = APIRouter(
+    prefix="/tdx",
+    tags=["tdx"],
+    dependencies=[Depends(tdx_webhook)],
+)
 
 
 def _processed(result: dict) -> dict:

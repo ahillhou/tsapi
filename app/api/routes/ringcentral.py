@@ -3,15 +3,19 @@
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 
 from app.clients.ringcentral.presence import set_dnd
+from app.core.security import ringcentral_webhook
 from app.services.nurse_dayoff import handle_sms_command
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["ringcentral"])
+router = APIRouter(
+    tags=["ringcentral"],
+    dependencies=[Depends(ringcentral_webhook)],
+)
 
 
 async def read_ringcentral_json(request: Request) -> dict:
