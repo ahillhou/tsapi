@@ -67,6 +67,21 @@ uv sync
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
+## Tests
+
+```bash
+uv run pytest
+```
+
+The tests replace TDX, PCR360 and RingCentral with fakes that record every
+call, so they never touch the real systems. They check the exact payloads
+sent (including which PCR360 instance, test or prod, each route uses),
+the remarks text, the RingCentral day-off flow, and the webhook secrets.
+
+GitHub Actions runs the tests and builds/starts the Docker image on every
+push (`.github/workflows/tests.yml`). Check that it's green before
+deploying.
+
 ## Dependencies
 
 Edit `pyproject.toml`, then refresh the lock file and the pinned list the

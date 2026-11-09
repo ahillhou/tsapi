@@ -1,0 +1,40 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same Python and pinned packages as the Docker image
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest==9.2.0
+
+      - name: Run tests
+        run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t voicerequest .
+
+      - name: Start container and wait for /health
+        run: |
+          docker run -d --name voicerequest -p 8000:8000 voicerequest
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs voicerequest
+          exit 1
