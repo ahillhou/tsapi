@@ -1,7 +1,7 @@
-def get_extension_by_number(
-    platform,
-    extension_number
-):
+"""RingCentral extension (user) lookups."""
+
+
+def get_extension_by_number(platform, extension_number):
     page = 1
 
     while True:
@@ -9,13 +9,11 @@ def get_extension_by_number(
             "/restapi/v1.0/account/~/extension",
             {
                 "page": page,
-                "perPage": 1000
-            }
+                "perPage": 1000,
+            },
         )
 
-        data = response.json_dict()
-
-        records = data.get("records", [])
+        records = response.json_dict().get("records", [])
 
         if not records:
             return None
@@ -25,6 +23,7 @@ def get_extension_by_number(
                 return ext
 
         page += 1
+
 
 def get_extension(platform, extension_id):
     response = platform.get(

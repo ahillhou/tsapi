@@ -1,12 +1,11 @@
 import logging
-import os
 import threading
 
 from ringcentral import SDK
 
-logger = logging.getLogger(__name__)
+from app.core.config import get_settings
 
-SERVER_URL = "https://platform.ringcentral.com"
+logger = logging.getLogger(__name__)
 
 _platform = None
 _lock = threading.Lock()
@@ -24,16 +23,14 @@ def get_platform():
     global _platform
 
     with _lock:
+        s = get_settings()
+
         if _platform is None:
-            sdk = SDK(
-                os.getenv("RC_CLIENT_ID"),
-                os.getenv("RC_CLIENT_SECRET"),
-                SERVER_URL,
-            )
+            sdk = SDK(s.rc_client_id, s.rc_client_secret, s.rc_server_url)
             _platform = sdk.platform()
 
         if not _platform.logged_in():
             logger.info("Logging in to RingCentral")
-            _platform.login(jwt=os.getenv("RC_JWT_TOKEN"))
+            _platform.login(jwt=s.rc_jwt_token)
 
         return _platform
