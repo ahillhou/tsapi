@@ -75,13 +75,13 @@ def test_access_request_without_data_is_rejected(client, http):
 # ---- /tdx/webhook (RingCentral Request form -> PCR360 test SO) -----------
 
 
-def test_ringcentral_request_creates_so_with_attachments_in_one_call(client, http, ticket):
+def test_ringcentral_request_creates_so_then_uploads_attachments(client, http, ticket):
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 200
     assert response.json()["service_request"] == {"servicedesk": "SD-1"}
 
-    [so] = http.pcr_calls()  # no separate ATTACHMENT calls
+    so, upload_a, upload_b = http.pcr_calls()
 
     assert so["url"] == PCR_TEST_URL
     assert so["headers"] == PCR_HEADERS
@@ -90,11 +90,52 @@ def test_ringcentral_request_creates_so_with_attachments_in_one_call(client, htt
         "csr": 1,
         "description": "RingCentral New Request",
         "remarks": build_ringcentral_request_remarks(ticket),
-        "files": [
-            {"filename": "a.pdf", "data": base64.b64encode(b"file:1").decode()},
-            {"filename": "b.png", "data": base64.b64encode(b"file:2").decode()},
-        ],
     }
+
+    for upload, name, file_id in ((upload_a, "a.pdf", "1"), (upload_b, "b.png", "2")):
+        assert upload["url"] == PCR_TEST_URL
+        # No Pcr-Html-Encoded on attachments (PCR360 500s on the files list)
+        assert upload["headers"] == {"Content-Type": "application/json"}
+        assert upload["json"] == {
+            "type": "ATTACHMENT",
+            "sd_number": "SD-1",
+            "files": [
+                {
+                    "filename": name,
+                    "data": base64.b64encode(f"file:{file_id}".encode()).decode(),
+                }
+            ],
+        }
+
+
+def test_failed_attachment_still_returns_the_so(client, http, ticket, monkeypatch):
+    def post(url, **kwargs):
+        response = http.post(url, **kwargs)
+        if kwargs["json"].get("type") == "ATTACHMENT":
+            response.status_code = 500
+            response.text = "<html>error</html>"
+        return response
+
+    monkeypatch.setattr(requests, "post", post)
+
+    response = client.post("/tdx/webhook", json_body={"data": ticket})
+
+    assert response.status_code == 200
+    assert response.json()["service_request"] == {"servicedesk": "SD-1"}
+
+
+def test_pcr_errors_never_include_the_api_key(client, http, ticket, monkeypatch, caplog):
+    def post(url, **kwargs):
+        raise requests.ConnectionError(f"Max retries exceeded with url: {url}")
+
+    monkeypatch.setattr(requests, "post", post)
+
+    with caplog.at_level("INFO"):
+        response = client.post("/tdx/webhook", json_body={"data": ticket})
+
+    assert response.status_code == 500
+    assert "KEY-TEST" not in caplog.text
+    assert "KEY-TEST" not in response.body.decode()
 
 
 def test_ringcentral_request_downloads_attachments_from_tdx(client, http, ticket):
@@ -269,3 +310,34 @@ def test_every_outbound_call_has_a_timeout(client, http, ticket):
 
     assert http.calls
     assert all(c["timeout"] for c in http.calls)
+
+
+def test_pcr_exception_traceback_has_no_api_key(monkeypatch):
+    import traceback
+
+    from app.clients import pcr360
+
+    def post(url, **kwargs):
+        raise requests.ConnectionError(f"Max retries exceeded with url: {url}")
+
+    monkeypatch.setattr(requests, "post", post)
+
+    with pytest.raises(pcr360.PCR360Error) as info:
+        pcr360.create_service_order("d", "r")
+
+    printed = "".join(traceback.format_exception(info.value))
+    assert "KEY-TEST" not in printed
+
+
+def test_pcr_http_error_traceback_has_no_api_key(http):
+    import traceback
+
+    from app.clients import pcr360
+
+    http.pcr_status = 500
+
+    with pytest.raises(pcr360.PCR360Error) as info:
+        pcr360.create_service_order("d", "r")
+
+    assert "HTTP 500" in str(info.value)
+    assert "KEY-TEST" not in "".join(traceback.format_exception(info.value))

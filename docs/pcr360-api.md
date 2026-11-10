@@ -127,3 +127,5 @@ Source: https://wiki360.pcr.com/pcr360-wiki/2025.2/api
 9. **FIXED 2026-11-10** (all calls use `HTTP_TIMEOUT` from `app/core/config.py`). No timeouts on `requests.*` calls; a hung PCR360 will hang the worker.
 10. Logging: `create_inquiry` logs email/payload; `lookup_sd` and attachment logging dump whole responses. Do not log the URL (contains the API key).
 11. `requests` `json=` already sets `Content-Type: application/json`; the explicit header is harmless.
+12. Attachments + `Pcr-Html-Encoded: TRUE` (seen 2026-11-10 on PCR360 test): `type=ATTACHMENT`, and `files` sent with an SO create, both came back HTTP 500 with PCR360's HTML error page. Likely cause (unverified): the header HTML-decodes every parameter and fails on the nested `files` list. `upload_attachment` now sends only `Content-Type`. The SO is created first, so a failed attachment never loses the SO.
+13. `requests` errors include the full URL, which holds the API key. All PCR360 calls go through `_post`/`_raise_for_status`, which raise `PCR360Error` without the URL (`from None`, so the chained exception isn't printed either).

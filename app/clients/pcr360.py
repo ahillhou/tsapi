@@ -20,6 +20,9 @@ HEADERS = {
     "Pcr-Html-Encoded": "TRUE",
 }
 
+# See upload_attachment().
+ATTACHMENT_HEADERS = {"Content-Type": "application/json"}
+
 VVX_150 = 889
 
 
@@ -59,6 +62,23 @@ def _short(response: requests.Response, limit: int = 300) -> str:
     return text if len(text) <= limit else text[:limit] + "..."
 
 
+class PCR360Error(Exception):
+    """A failed PCR360 call. Never includes the URL (it holds the API key)."""
+
+
+def _post(url: str, payload: dict, headers: dict = HEADERS) -> requests.Response:
+    try:
+        return requests.post(url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
+    except requests.RequestException as exc:
+        # requests puts the URL (and so the API key) in its messages.
+        raise PCR360Error(f"PCR360 {payload.get('type')} request failed: {type(exc).__name__}") from None
+
+
+def _raise_for_status(response: requests.Response) -> None:
+    if response.status_code >= 400:
+        raise PCR360Error(f"PCR360 returned HTTP {response.status_code}: {_short(response, 120)}")
+
+
 def create_service_order(
     description: str,
     remarks: str,
@@ -89,7 +109,7 @@ def create_service_order(
     if files:
         payload["files"] = files
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
+    response = _post(_test_url(), payload)
 
     logger.info(
         "PCR360 SO status %s (%d files): %s",
@@ -98,7 +118,7 @@ def create_service_order(
         _short(response),
     )
 
-    response.raise_for_status()
+    _raise_for_status(response)
     return response.json()
 
 
@@ -112,8 +132,8 @@ def create_service_request(description: str, remarks: str) -> dict:
         "remarks": remarks,
     }
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
-    response.raise_for_status()
+    response = _post(_test_url(), payload)
+    _raise_for_status(response)
 
     return response.json()
 
@@ -139,7 +159,7 @@ def create_inquiry(subject: str, message: str, email: str, topic: int) -> dict:
     logger.info("Creating PCR360 inquiry for %s", email)
     logger.info("Payload: %s", json.dumps(payload, indent=2))
 
-    response = requests.post(_prod_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
+    response = _post(_prod_url(), payload)
 
     logger.info("PCR360 status %s: %s", response.status_code, _short(response))
 
@@ -163,11 +183,11 @@ def test_create_inquiry(subject: str, message: str, email: str, topic: int) -> d
         "topic": topic,
     }
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
+    response = _post(_test_url(), payload)
 
     logger.info("PCR360 status %s: %s", response.status_code, _short(response))
 
-    response.raise_for_status()
+    _raise_for_status(response)
     return response.json()
 
 
@@ -181,11 +201,11 @@ def add_equipment(so_number: str) -> dict:
         "eqp_catalog": VVX_150,
     }
 
-    response = requests.post(_legacy_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
+    response = _post(_legacy_test_url(), payload)
 
     logger.info("Equipment status %s: %s", response.status_code, _short(response))
 
-    response.raise_for_status()
+    _raise_for_status(response)
     return response.json()
 
 
@@ -195,17 +215,17 @@ def upload_attachment(sd_number: str, filename: str, file_content: bytes) -> dic
 
     Returns {"status": "error", "response": ...} instead of raising when
     PCR360 rejects the request.
+
+    Sent WITHOUT Pcr-Html-Encoded: that header makes PCR360 HTML-decode
+    every parameter, and with the nested `files` list it answered HTTP 500
+    (2026-11-10, both here and with files on the SO create). Nothing in
+    this payload is HTML-encoded, so the header isn't needed.
     """
 
     payload = {
         "type": "ATTACHMENT",
         "sd_number": sd_number,
-        "files": [
-            {
-                "filename": filename,
-                "data": base64.b64encode(file_content).decode("utf-8"),
-            }
-        ],
+        "files": [encode_file(filename, file_content)],
     }
 
     logger.info(
@@ -215,11 +235,14 @@ def upload_attachment(sd_number: str, filename: str, file_content: bytes) -> dic
         sd_number,
     )
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
+    try:
+        response = _post(_test_url(), payload, headers=ATTACHMENT_HEADERS)
+    except PCR360Error as exc:
+        return {"status": "error", "response": str(exc)}
 
     logger.info("Attachment status %s: %s", response.status_code, _short(response))
 
-    if response.status_code >= 400:
+    if response.status_code >= 400 or not response.text.strip().startswith("{"):
         return {
             "status": "error",
             "response": _short(response),

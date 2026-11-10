@@ -72,19 +72,13 @@ def submit_ringcentral_request(ticket: dict) -> dict:
 
     remarks = build_ringcentral_request_remarks(ticket)
 
-    # Attachments go in the SO create call itself. A separate
-    # type=ATTACHMENT call made PCR360 test return HTTP 500 (2026-11-10).
-    files = []
-    for attachment in attachments:
-        file_content = download_attachment(attachment["ContentUri"])
-        logger.info("Downloaded attachment %s (%d bytes)", attachment["Name"], len(file_content))
-        files.append(pcr360.encode_file(attachment["Name"], file_content))
-
+    # Create the SO first, then attach files one call each. Sending files
+    # with the create made PCR360 fail the whole SO (HTTP 500, 2026-11-10);
+    # this way a bad attachment never costs us the SO.
     result = pcr360.create_service_order(
         description=SERVICE_ORDER_DESCRIPTION,
         remarks=remarks,
         sdc=sdc,
-        files=files,
     )
 
     sd_number = result.get("servicedesk")
@@ -93,7 +87,19 @@ def submit_ringcentral_request(ticket: dict) -> dict:
         logger.error("PCR360 did not create the SO: %s", result)
         return result
 
-    logger.info("PCR360 SO number: %s (sent %d attachments with it)", sd_number, len(files))
+    logger.info("PCR360 SO number: %s", sd_number)
+
+    for attachment in attachments:
+        file_content = download_attachment(attachment["ContentUri"])
+
+        upload = pcr360.upload_attachment(
+            sd_number=sd_number,
+            filename=attachment["Name"],
+            file_content=file_content,
+        )
+
+        if upload.get("status") in ("error", "failure"):
+            logger.error("Attachment %s was not added to %s: %s", attachment["Name"], sd_number, upload)
 
     return result
 
