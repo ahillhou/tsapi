@@ -1,4 +1,10 @@
-"""Webhooks called by TDX form workflows."""
+"""
+Webhooks called by TDX form workflows.
+
+DO NOT change these paths. The TDX admin owns the form/web-service
+configuration and the URLs can't be updated from our side. See
+tests/test_route_contract.py.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
 

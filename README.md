@@ -12,6 +12,12 @@ Runs in Docker on port 8000 behind the university VIP (VPN only).
 | `POST /demo/dayoff` | RingCentral SMS workflow | Toggles a nurse's out-of-office call rule, texts back the result |
 | `POST /ringcentral/dnd` | RingCentral workflow | Turns Do Not Disturb on/off |
 
+**These URLs must not change.** The TDX admin builds the forms and owns
+the webhook URLs configured in TDX; we can't edit them. Renaming or
+moving a live route breaks that integration. If a route needs a new
+path, add the new one and keep the old one working.
+`tests/test_route_contract.py` fails if a live URL disappears.
+
 Manual testing routes are in `app/api/routes/debug.py`. They are only
 available when `ENABLE_DEBUG_ROUTES=true`.
 
@@ -28,7 +34,10 @@ logged at startup. To turn a secret on without breaking anything:
 
 1. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 2. Configure the caller (the TDX web service or the RingCentral workflow)
-   to send the `X-Webhook-Secret` header with that value.
+   to send the `X-Webhook-Secret` header with that value. For TDX this
+   is a request to the TDX admin: they add a header to the existing web
+   service, and the URL stays the same. Don't use `?key=` for TDX,
+   because that changes the URL.
 3. Add it to `app/.env` (`TDX_WEBHOOK_SECRET=` or
    `RINGCENTRAL_WEBHOOK_SECRET=`) and run `./deploy.sh`.
 4. Submit a test form or text, and check `docker logs` for
