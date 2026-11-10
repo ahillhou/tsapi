@@ -1,30 +1,88 @@
 """TeamDynamix (TDX) API client."""
 
+import logging
+import threading
+import time
+
 import requests
 
-from app.core.config import get_settings
+from app.core.config import HTTP_TIMEOUT, get_settings
+
+logger = logging.getLogger(__name__)
+
+# TDX tokens are valid for 24 hours and /api/auth is rate limited, so log in
+# once and reuse the token. Refresh well before expiry, and immediately if
+# TDX answers 401.
+TOKEN_MAX_AGE_SECONDS = 12 * 60 * 60
+
+_token: str | None = None
+_token_issued_at = 0.0
+_token_lock = threading.Lock()
 
 
-def authenticate() -> dict:
-    """Authenticate with TDX and return request headers."""
-
+def _login() -> str:
     s = get_settings()
 
-    auth_response = requests.post(
+    response = requests.post(
         f"{s.tdx_base_url}/api/auth",
         json={
             "UserName": s.tdx_username,
             "Password": s.tdx_password,
         },
+        timeout=HTTP_TIMEOUT,
     )
-    auth_response.raise_for_status()
+    response.raise_for_status()
 
-    token = auth_response.text
+    logger.info("Logged in to TDX")
+    return response.text
 
-    return {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+
+def authenticate(force_refresh: bool = False) -> dict:
+    """Return TDX request headers with a valid bearer token."""
+
+    global _token, _token_issued_at
+
+    with _token_lock:
+        expired = time.monotonic() - _token_issued_at > TOKEN_MAX_AGE_SECONDS
+
+        if force_refresh or _token is None or expired:
+            _token = _login()
+            _token_issued_at = time.monotonic()
+
+        return {
+            "Authorization": f"Bearer {_token}",
+            "Content-Type": "application/json",
+        }
+
+
+def clear_token() -> None:
+    """Forget the cached token (used by tests)."""
+
+    global _token, _token_issued_at
+
+    with _token_lock:
+        _token = None
+        _token_issued_at = 0.0
+
+
+def _request(method: str, url: str, **kwargs) -> requests.Response:
+    """Authenticated request; logs in again once if the token was rejected."""
+
+    send = getattr(requests, method)
+
+    response = send(url, headers=authenticate(), timeout=HTTP_TIMEOUT, **kwargs)
+
+    if response.status_code == 401:
+        logger.info("TDX token rejected; logging in again")
+        response = send(
+            url,
+            headers=authenticate(force_refresh=True),
+            timeout=HTTP_TIMEOUT,
+            **kwargs,
+        )
+
+    response.raise_for_status()
+    return response
 
 
 def get_ticket(ticket_id: int) -> dict:
@@ -32,28 +90,24 @@ def get_ticket(ticket_id: int) -> dict:
 
     s = get_settings()
 
-    response = requests.get(
-        f"{s.tdx_base_url}/api/tickets/{ticket_id}",
-        headers=authenticate(),
-    )
-    response.raise_for_status()
-
-    return response.json()
+    return _request("get", f"{s.tdx_base_url}/api/tickets/{ticket_id}").json()
 
 
 def search_tickets(search_body: dict | None = None) -> list:
-    """Search for tickets in the configured TDX app."""
+    """
+    Search for tickets in the configured TDX app.
+
+    Search results leave out Attributes, Description and Attachments; call
+    get_ticket() for each result before building remarks.
+    """
 
     s = get_settings()
 
-    response = requests.post(
+    return _request(
+        "post",
         f"{s.tdx_base_url}/api/{s.tdx_app_id}/tickets/search",
-        headers=authenticate(),
         json=search_body or {},
-    )
-    response.raise_for_status()
-
-    return response.json()
+    ).json()
 
 
 def download_attachment(content_uri: str) -> bytes:
@@ -61,19 +115,13 @@ def download_attachment(content_uri: str) -> bytes:
 
     s = get_settings()
 
-    response = requests.get(
-        f"{s.tdx_base_url}/{content_uri}",
-        headers=authenticate(),
-    )
-    response.raise_for_status()
-
-    return response.content
+    return _request("get", f"{s.tdx_base_url}/{content_uri}").content
 
 
 def get_attribute(ticket: dict, name: str) -> str | None:
     """Return the ValueText of a ticket's custom attribute, or None."""
 
-    for attr in ticket["Attributes"]:
+    for attr in ticket.get("Attributes") or []:
         if attr["Name"] == name:
             return attr["ValueText"]
 

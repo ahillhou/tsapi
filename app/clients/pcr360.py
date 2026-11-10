@@ -11,7 +11,7 @@ import logging
 
 import requests
 
-from app.core.config import get_settings
+from app.core.config import HTTP_TIMEOUT, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ def create_service_order() -> str:
         "remarks": remarks,
     }
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload)
+    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
     response.raise_for_status()
 
     return response.json()["servicedesk"]
@@ -79,7 +79,7 @@ def create_service_request(description: str, remarks: str) -> dict:
         "remarks": remarks,
     }
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload)
+    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
     response.raise_for_status()
 
     return response.json()
@@ -106,7 +106,7 @@ def create_inquiry(subject: str, message: str, email: str, topic: int) -> dict:
     logger.info("Creating PCR360 inquiry for %s", email)
     logger.info("Payload: %s", json.dumps(payload, indent=2))
 
-    response = requests.post(_prod_url(), headers=HEADERS, json=payload)
+    response = requests.post(_prod_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
 
     logger.info("PCR360 status %s: %s", response.status_code, response.text)
 
@@ -130,7 +130,7 @@ def test_create_inquiry(subject: str, message: str, email: str, topic: int) -> d
         "topic": topic,
     }
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload)
+    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
 
     logger.info("PCR360 status %s: %s", response.status_code, response.text)
 
@@ -148,7 +148,7 @@ def add_equipment(so_number: str) -> dict:
         "eqp_catalog": VVX_150,
     }
 
-    response = requests.post(_legacy_test_url(), headers=HEADERS, json=payload)
+    response = requests.post(_legacy_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
 
     logger.info("Equipment status %s: %s", response.status_code, response.text)
 
@@ -182,7 +182,7 @@ def upload_attachment(sd_number: str, filename: str, file_content: bytes) -> dic
         sd_number,
     )
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload)
+    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
 
     logger.info("Attachment status %s: %s", response.status_code, response.text)
 
@@ -191,15 +191,5 @@ def upload_attachment(sd_number: str, filename: str, file_content: bytes) -> dic
             "status": "error",
             "response": response.text,
         }
-
-    return response.json()
-
-
-def lookup_sd(sd_number: str) -> dict:
-    """Search Service Desk records in PCR360 **test**."""
-
-    response = requests.get(_test_url(), params={"SEARCH": sd_number})
-
-    logger.info("Lookup %s: %s", sd_number, response.text)
 
     return response.json()

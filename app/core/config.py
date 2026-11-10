@@ -17,6 +17,11 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
+# (connect, read) seconds for calls to TDX and PCR360. Generous read time
+# because attachment uploads can be large, but never wait forever.
+HTTP_TIMEOUT = (10, 60)
+
+
 @dataclass(frozen=True)
 class Settings:
     # TeamDynamix

@@ -56,13 +56,13 @@ def submit_test_access_request(ticket: dict) -> dict:
     iq_number = result["servicedesk"]
     logger.info("Inquiry number: %s", iq_number)
 
-    sd_recid = pcr360.lookup_sd(iq_number)
-
+    # PCR360 ATTACHMENT takes the service desk number itself (e.g. "IQ123"),
+    # which the create call already returned.
     for attachment in ticket.get("Attachments", []):
         file_content = download_attachment(attachment["ContentUri"])
 
         pcr360.upload_attachment(
-            sd_number=sd_recid,
+            sd_number=iq_number,
             filename=attachment["Name"],
             file_content=file_content,
         )

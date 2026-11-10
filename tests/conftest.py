@@ -32,6 +32,7 @@ os.environ.update(TEST_ENV)
 import pytest  # noqa: E402
 import requests  # noqa: E402
 
+from app.clients import tdx as tdx_client  # noqa: E402
 from app.clients.ringcentral import auth as rc_auth  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 
@@ -100,17 +101,40 @@ class FakeHTTP:
         self.calls = []
         self.pcr_status = 200
         self.pcr_response = {"servicedesk": "SD-1"}
+        self.tdx_logins = 0
+        self.tdx_reject_next = 0  # answer this many TDX API calls with 401
+
+    def _record(self, method, url, headers, kwargs, **extra):
+        self.calls.append(
+            {"method": method, "url": url, "headers": headers, "timeout": kwargs.get("timeout"), **extra}
+        )
+
+    def _tdx_rejected(self, url):
+        if url.startswith(TDX_BASE) and self.tdx_reject_next:
+            self.tdx_reject_next -= 1
+            return True
+        return False
 
     def post(self, url, headers=None, json=None, **kwargs):
-        self.calls.append({"method": "POST", "url": url, "headers": headers, "json": json})
+        self._record("POST", url, headers, kwargs, json=json)
 
         if url == f"{TDX_BASE}/api/auth":
-            return FakeResponse(text="TDX-TOKEN")
+            self.tdx_logins += 1
+            return FakeResponse(text=f"TDX-TOKEN-{self.tdx_logins}")
+
+        if self._tdx_rejected(url):
+            return FakeResponse(401, {})
+
+        if url.startswith(TDX_BASE):
+            return FakeResponse(json_data=[{"ID": 777}])
 
         return FakeResponse(self.pcr_status, self.pcr_response)
 
     def get(self, url, headers=None, params=None, **kwargs):
-        self.calls.append({"method": "GET", "url": url, "headers": headers, "params": params})
+        self._record("GET", url, headers, kwargs, params=params)
+
+        if self._tdx_rejected(url):
+            return FakeResponse(401, {})
 
         if url.startswith(f"{TDX_BASE}/api/tickets/"):
             return FakeResponse(json_data=copy.deepcopy(SAMPLE_TICKET))
@@ -198,7 +222,9 @@ def http(monkeypatch):
     fake = FakeHTTP()
     monkeypatch.setattr(requests, "post", fake.post)
     monkeypatch.setattr(requests, "get", fake.get)
-    return fake
+    tdx_client.clear_token()
+    yield fake
+    tdx_client.clear_token()
 
 
 @pytest.fixture(autouse=True)

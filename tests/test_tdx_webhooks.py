@@ -111,7 +111,8 @@ def test_ringcentral_request_downloads_attachments_from_tdx(client, http, ticket
         "https://utk.teamdynamix.com/sbtdwebapi/api/attachments/1/content",
         "https://utk.teamdynamix.com/sbtdwebapi/api/attachments/2/content",
     ]
-    assert all(c["headers"]["Authorization"] == "Bearer TDX-TOKEN" for c in downloads)
+    assert all(c["headers"]["Authorization"] == "Bearer TDX-TOKEN-1" for c in downloads)
+    assert http.tdx_logins == 1  # one login reused for both downloads
 
 
 def test_ringcentral_request_pcr_failure_is_an_error(client, http, ticket):
@@ -130,8 +131,24 @@ def test_test_access_request_uses_pcr_test(client, http, ticket):
 
     assert response.status_code == 200
 
-    inquiry = http.pcr_calls()[0]
+    inquiry, upload_a, upload_b = http.pcr_calls()
     assert inquiry["url"] == PCR_TEST_URL
     assert inquiry["json"]["email"] == "pat@example.edu"
     assert inquiry["json"]["topic"] == 349
-    assert all(c["url"] == PCR_TEST_URL for c in http.pcr_calls())
+
+    # Attachments go to the inquiry number PCR360 returned
+    for upload, name in ((upload_a, "a.pdf"), (upload_b, "b.png")):
+        assert upload["url"] == PCR_TEST_URL
+        assert upload["json"]["sd_number"] == "SD-1"
+        assert upload["json"]["files"][0]["filename"] == name
+
+
+# ---- Outbound call hygiene ----------------------------------------------
+
+
+def test_every_outbound_call_has_a_timeout(client, http, ticket):
+    client.post("/tdx/webhook", json_body={"data": ticket})
+    client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert http.calls
+    assert all(c["timeout"] for c in http.calls)

@@ -190,14 +190,14 @@ https://solutions.teamdynamix.com/TDClient/KB/ArticleDet?ID=18979 ; https://solu
 
 ## 9. Gotchas for this project
 
-1. **Token fetched on every call.** `get_ticket`, `search_tickets` and `download_attachment` each call `authenticate()`, so one ticket with N
+1. **FIXED 2026-11-10** (token is cached for 12h and refreshed once on a 401). **Token fetched on every call.** `get_ticket`, `search_tickets` and `download_attachment` each call `authenticate()`, so one ticket with N
    attachments costs N+2 auth requests. `/api/auth` is limited to 60/min per IP; this will 429 under load. Cache the JWT (24 h; refresh on 401
    or shortly before `exp`).
 2. **No retry/429 handling.** `raise_for_status()` surfaces a 429. Honor `X-RateLimit-Reset` with a minimum 5 s wait.
-3. **No request timeouts** on any `requests` call, so a hung TDX connection hangs a worker. Add `timeout=`.
+3. **FIXED 2026-11-10** (`HTTP_TIMEOUT`). **No request timeouts** on any `requests` call, so a hung TDX connection hangs a worker. Add `timeout=`.
 4. **Search results are partial** (no `Attributes`, `Description`, `Attachments`). `get_attribute()` and the remarks builders on a search hit
    will raise `KeyError`/return None. Fetch each ticket by ID first.
-5. **`get_attribute()` indexes `ticket["Attributes"]`**, but the field is nullable. `Attributes` may be `null` or missing, so use `ticket.get("Attributes") or []`.
+5. **FIXED 2026-11-10** (now tolerates null/missing Attributes). **`get_attribute()` indexes `ticket["Attributes"]`**, but the field is nullable. `Attributes` may be `null` or missing, so use `ticket.get("Attributes") or []`.
    Matching is by display `Name`, so renaming a field in TDX silently breaks remarks (returns None, rendered as "None").
    Use `ValueText` (readable) and not `Value` (choice IDs).
 6. **`ContentUri` joining**: `f"{base}/{content_uri}"` assumes a relative path with no leading slash (unverified). Normalize with `urljoin`
