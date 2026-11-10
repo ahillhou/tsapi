@@ -101,4 +101,4 @@ def test_sms_failure_is_logged_without_token_and_explains_msg_304(client, rc, mo
     assert SECRET_TOKEN not in caplog.text
     assert all(r.exc_info is None for r in caplog.records)
     assert "MSG-304" in caplog.text
-    assert "+18659749955 is not an SMS-enabled number" in caplog.text
+    assert "+18659740716 is not an SMS-enabled number" in caplog.text

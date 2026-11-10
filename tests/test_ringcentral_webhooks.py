@@ -36,7 +36,7 @@ def test_dayoff_enables_own_rule_and_texts_back(client, rc):
     assert _patches(rc) == [(RULE_PATH.format("101"), True)]
     assert rc.sms_sent() == [
         {
-            "from": {"phoneNumber": "+18659749955"},
+            "from": {"phoneNumber": "+18659740716"},
             "to": [{"phoneNumber": "+15555550100"}],
             "text": "Call rule enabled for Nurse 101.",
         }

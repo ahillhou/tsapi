@@ -77,7 +77,9 @@ def get_settings() -> Settings:
         rc_client_id=os.getenv("RC_CLIENT_ID"),
         rc_client_secret=os.getenv("RC_CLIENT_SECRET"),
         rc_jwt_token=os.getenv("RC_JWT_TOKEN"),
-        rc_sms_from_number="+18659749955",
+        # Replies must come from the number nurses text to trigger the
+        # workflow; the JWT user must have it as an SMS-enabled number.
+        rc_sms_from_number=os.getenv("RC_SMS_FROM_NUMBER") or "+18659740716",
         tdx_webhook_secret=os.getenv("TDX_WEBHOOK_SECRET") or None,
         ringcentral_webhook_secret=os.getenv("RINGCENTRAL_WEBHOOK_SECRET") or None,
         enable_debug_routes=_env_bool("ENABLE_DEBUG_ROUTES"),
