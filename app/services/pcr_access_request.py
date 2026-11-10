@@ -96,19 +96,19 @@ def _attach_files(
     *,
     download: Callable[[str], bytes],
     upload: Callable[..., dict],
-    remark: Callable[[int, str], dict],
+    remark: Callable[..., dict],
 ) -> None:
     attachments = ticket.get("Attachments") or []
     if not attachments:
         return
 
     try:
-        # Creating an IQ returns its RECID in "servicedesk".
-        sd_recid = inquiry["servicedesk"]
+        # The create returned the inquiry number ("IQ00000127").
+        target = pcr360.sd_target(inquiry["servicedesk"])
         problems = []
 
         for attachment in attachments:
-            problem = _attach_one(attachment, sd_recid, download, upload)
+            problem = _attach_one(attachment, target, download, upload)
             if problem:
                 problems.append(problem)
 
@@ -118,16 +118,16 @@ def _attach_files(
                 + f"Please get these files from TDX Ticket ID# {ticket['ID']}."
             )
 
-            result = remark(sd_recid, note)
+            result = remark(note, **target)
             if result.get("status") == "error":
-                logger.error("Could not add the attachment note to %s: %s", sd_recid, result)
+                logger.error("Could not add the attachment note to %s: %s", target, result)
 
     except Exception:
         # The inquiry already exists and TDX already has its answer.
         logger.exception("Attachments for ticket %s failed", ticket.get("ID"))
 
 
-def _attach_one(attachment: dict, sd_recid, download, upload) -> str | None:
+def _attach_one(attachment: dict, target: dict, download, upload) -> str | None:
     """Attach one file. Returns a note for the inquiry if it wasn't attached."""
 
     name = attachment.get("Name") or "(unnamed file)"
@@ -147,7 +147,7 @@ def _attach_one(attachment: dict, sd_recid, download, upload) -> str | None:
         logger.warning("Attachment %s is too large (%d bytes); not sent", name, len(content))
         return f"Attachment {name} ({_mb(len(content))}) is over the 50 MB limit and was not added"
 
-    result = upload(name, content, sd_recid=sd_recid)
+    result = upload(name, content, **target)
 
     if result.get("status") == "error":
         logger.error("PCR360 rejected attachment %s: %s", name, result)

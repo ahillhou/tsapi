@@ -16,7 +16,7 @@ PCR_HEADERS = {"Content-Type": "application/json", "Pcr-Html-Encoded": "TRUE"}
 # ---- /tdx/webhook/access_request (production) -----------------------------
 
 
-IQ_RECID = 33359  # creating an IQ returns its RECID in "servicedesk"
+IQ_NUMBER = "IQ00000127"  # what creating an IQ actually returns (2026-11-10)
 ATTACHMENT_HEADERS = {"Content-Type": "application/json"}
 
 
@@ -35,14 +35,14 @@ def _expected_inquiry(ticket):
 def _prod_attachment(name, file_id):
     return {
         "type": "ATTACHMENT",
-        "sd_recid": IQ_RECID,
+        "sd_number": IQ_NUMBER,
         "files": [{"filename": name, "data": base64.b64encode(f"file:{file_id}".encode()).decode()}],
     }
 
 
 @pytest.fixture
 def iq(http):
-    http.pcr_response = {"status": "success", "servicedesk": IQ_RECID}
+    http.pcr_response = {"status": "success", "servicedesk": IQ_NUMBER}
 
 
 def test_access_request_creates_production_inquiry(client, http, ticket, iq):
@@ -51,7 +51,7 @@ def test_access_request_creates_production_inquiry(client, http, ticket, iq):
     assert response.status_code == 200
     assert response.json() == {
         "status": "processed",
-        "service_request": {"status": "success", "servicedesk": IQ_RECID},
+        "service_request": {"status": "success", "servicedesk": IQ_NUMBER},
     }
 
     inquiry = http.pcr_calls()[0]
@@ -75,7 +75,7 @@ def test_access_request_copies_attachments_from_production_tdx_to_production_pcr
     client.post("/tdx/webhook/access_request", json_body={"data": ticket})
 
     # Exactly: inquiry, then each file downloaded from PROD TDX and attached
-    # to the PROD inquiry by RECID, without Pcr-Html-Encoded. No remark.
+    # to the PROD inquiry by its number, without Pcr-Html-Encoded. No remark.
     calls = [(c["method"], c["url"]) for c in http.calls]
     assert calls == [
         ("POST", PCR_PROD_URL),
@@ -114,7 +114,7 @@ def test_rejected_attachment_leaves_a_note_and_still_returns_200(client, http, t
     assert remark["headers"] == PCR_HEADERS
     assert remark["json"] == {
         "type": "REMARKS",
-        "sd_recid": IQ_RECID,
+        "sd_number": IQ_NUMBER,
         "remarks": (
             "Attachment a.pdf could not be added (PCR360 rejected the file)<br><br>"
             "Attachment b.png could not be added (PCR360 rejected the file)<br><br>"
@@ -158,7 +158,7 @@ def test_failed_note_still_returns_200(client, http, ticket, iq):
     response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
 
     assert response.status_code == 200
-    assert response.json()["service_request"]["servicedesk"] == IQ_RECID
+    assert response.json()["service_request"]["servicedesk"] == IQ_NUMBER
 
 
 def test_unexpected_attachment_error_still_returns_200(client, http, ticket, iq, monkeypatch):
@@ -437,13 +437,13 @@ def test_test_access_request_uses_sandbox_tdx_and_pcr_test(client, http, ticket,
     assert inquiry["json"]["email"] == "pat@example.edu"
     assert inquiry["json"]["topic"] == 349
 
-    # Attachments go to the inquiry's RECID, downloaded from the TDX sandbox
+    # Attachments go to the inquiry number, downloaded from the TDX sandbox
     assert upload["url"] == PCR_TEST_URL
     assert upload["headers"] == ATTACHMENT_HEADERS
-    assert upload["json"]["sd_recid"] == IQ_RECID
-    assert "sd_number" not in upload["json"]
+    assert upload["json"]["sd_number"] == IQ_NUMBER
+    assert "sd_recid" not in upload["json"]
     assert remark["url"] == PCR_TEST_URL
-    assert remark["json"]["sd_recid"] == IQ_RECID
+    assert remark["json"]["sd_number"] == IQ_NUMBER
 
     downloads = [c["url"] for c in http.calls if "/attachments/" in c["url"]]
     assert downloads == ["https://utk.teamdynamix.com/sbtdwebapi/api/attachments/1/content"]
@@ -490,3 +490,18 @@ def test_pcr_http_error_traceback_has_no_api_key(http):
 
     assert "HTTP 500" in str(info.value)
     assert "KEY-TEST" not in "".join(traceback.format_exception(info.value))
+
+
+@pytest.mark.parametrize(
+    "servicedesk, target",
+    [
+        ("IQ00000127", {"sd_number": "IQ00000127"}),
+        ("SO-000079", {"sd_number": "SO-000079"}),
+        (33359, {"sd_recid": 33359}),
+        ("33359", {"sd_recid": 33359}),
+    ],
+)
+def test_sd_target(servicedesk, target):
+    from app.clients import pcr360
+
+    assert pcr360.sd_target(servicedesk) == target

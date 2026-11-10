@@ -249,6 +249,22 @@ def _attachment_payload(target: dict, filename: str, file_content: bytes) -> dic
 # needed. With the header removed, uploads to an SO work.
 
 
+def sd_target(servicedesk) -> dict:
+    """
+    How to point at a record from the `servicedesk` value a create returned.
+
+    Creates return the record number ("SO-000079", "IQ00000127"), which goes
+    in sd_number. The wiki says an IQ create returns a RECID, but PCR360
+    returned "IQ00000127" (2026-11-10); a bare number is still treated as a
+    RECID just in case.
+    """
+
+    if isinstance(servicedesk, int) or str(servicedesk).isdigit():
+        return {"sd_recid": int(servicedesk)}
+
+    return {"sd_number": str(servicedesk)}
+
+
 def upload_attachment(
     filename: str,
     file_content: bytes,
@@ -256,13 +272,7 @@ def upload_attachment(
     sd_number: str | None = None,
     sd_recid: int | None = None,
 ) -> dict:
-    """
-    Attach a file to a Service Desk record in PCR360 **test**.
-
-    Pass sd_number for an SO ("SO-000079") or sd_recid for an Inquiry
-    (creating an IQ returns its RECID, not an IQ number). Never raises;
-    see _soft_post().
-    """
+    """Attach a file to a Service Desk record in PCR360 **test**. Never raises."""
 
     target = {"sd_recid": sd_recid} if sd_recid is not None else {"sd_number": sd_number}
 
@@ -273,27 +283,40 @@ def upload_attachment(
     )
 
 
-def upload_prod_attachment(filename: str, file_content: bytes, *, sd_recid: int) -> dict:
-    """Attach a file to a record in PCR360 **production** by RECID. Never raises."""
+def upload_prod_attachment(
+    filename: str,
+    file_content: bytes,
+    *,
+    sd_number: str | None = None,
+    sd_recid: int | None = None,
+) -> dict:
+    """Attach a file to a record in PCR360 **production**. Never raises."""
+
+    target = {"sd_recid": sd_recid} if sd_recid is not None else {"sd_number": sd_number}
 
     return _soft_post(
         _prod_url(),
-        _attachment_payload({"sd_recid": sd_recid}, filename, file_content),
+        _attachment_payload(target, filename, file_content),
         headers=ATTACHMENT_HEADERS,
     )
 
 
-def _remark_payload(sd_recid: int, remarks: str) -> dict:
-    return {"type": "REMARKS", "sd_recid": sd_recid, "remarks": remarks}
+def _remark_payload(remarks: str, sd_number: str | None, sd_recid: int | None) -> dict:
+    # The wiki documents only sd_recid for REMARKS; sd_number is what we
+    # have for records we create (see sd_target).
+    target = {"sd_recid": sd_recid} if sd_recid is not None else {"sd_number": sd_number}
+    return {"type": "REMARKS", **target, "remarks": remarks}
 
 
-def add_remark(sd_recid: int, remarks: str) -> dict:
+def add_remark(remarks: str, *, sd_number: str | None = None, sd_recid: int | None = None) -> dict:
     """Add a remark to a record in PCR360 **test**. Never raises."""
 
-    return _soft_post(_test_url(), _remark_payload(sd_recid, remarks))
+    return _soft_post(_test_url(), _remark_payload(remarks, sd_number, sd_recid))
 
 
-def add_prod_remark(sd_recid: int, remarks: str) -> dict:
+def add_prod_remark(
+    remarks: str, *, sd_number: str | None = None, sd_recid: int | None = None
+) -> dict:
     """Add a remark to a record in PCR360 **production**. Never raises."""
 
-    return _soft_post(_prod_url(), _remark_payload(sd_recid, remarks))
+    return _soft_post(_prod_url(), _remark_payload(remarks, sd_number, sd_recid))
