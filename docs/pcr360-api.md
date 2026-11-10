@@ -38,8 +38,9 @@ Success response (write):
 ```
 Note HTTP status may still be 200 for a "failure" body (unverified). Check `status` in the body, not only the HTTP code.
 
-### SO (Service Order) - used by `create_service_order`
+### SO (Service Order) - used by `create_service_order` (RingCentral Request form via `/tdx/webhook`, PCR360 test)
 - Required: `type=SO`, `csr` (RECID of the customer service rep).
+- We also send `sdc` (Service Desk Classification, which picks the workflow) once `DESIGN_SDC`/`DEFAULT_SDC` are set in `app/services/ringcentral_request.py`. The 2025.2 docs list `sdc` only for IN/WO/IQ, so whether SO honours it is (unverified) until tested on PCR360 test.
 - Useful optional: `description`, `remarks`, `due_date`, `source`, `urgency`, `requestor`, `owner` + `owner_type` (`contact` or `department`), `assoc_proj`, `udf_*` fields.
 - `status` may be set to `complete` or `finalize`; finalizing needs `finalized_date` (mm/dd/yyyy) and bills from that date. Completing needs `owner`. Do not set these casually.
 
@@ -118,7 +119,7 @@ Source: https://wiki360.pcr.com/pcr360-wiki/2025.2/api
 1. **FIXED 2026-11-10** (test access request now uploads to the `servicedesk` number from the create call). `lookup_sd` (`app/clients/pcr360.py`) returns the full parsed JSON, and per the task notes callers pass that as `sd_number` to `upload_attachment`. That is wrong: `sd_number` must be a string such as `SO2016...`. Extract it (or use the create response's `servicedesk`).
 2. **FIXED 2026-11-10** (`lookup_sd` removed; nothing used it after fix 1). `lookup_sd` uses `GET servicedesk.json?SEARCH=...`. The docs show `SEARCH` only for LIST lookups and read types `SO`/`IN` only. Behaviour is unverified; consider `servicedesk.SO.json` with a documented filter, or `sql.json` with `SELECT ... WHERE SD_NUMBER = ...`. It also sends no `HEADERS` and does no status check or `raise_for_status`.
 3. `create_service_request` uses `type=SR`, which the 2025.2 page does not list as a supported write type. Verify against `LIST=SDTYPES` on the test instance. (An unsupported type should come back as a failure message listing valid types.)
-4. Success is judged by HTTP only: `create_service_request`, `test_create_inquiry`, `add_equipment` use `raise_for_status()` and `create_inquiry`/`upload_attachment` check `>= 400`. A `{"status":"failure"}` body may arrive with HTTP 200 (unverified); check `response.json()["status"]`. `create_service_order` does `["servicedesk"]` and will raise KeyError on failure.
+4. Success is judged by HTTP only: `create_service_request`, `test_create_inquiry`, `add_equipment` use `raise_for_status()` and `create_inquiry`/`upload_attachment` check `>= 400`. A `{"status":"failure"}` body may arrive with HTTP 200 (unverified); check `response.json()["status"]`. `submit_ringcentral_request` now checks for a `servicedesk` number before uploading attachments (502 to TDX otherwise).
 5. `create_inquiry` (prod) hardcodes `sdc=6`, `csr=566`, and callers supply `topic`; these are instance RECIDs. `test_create_inquiry` sends neither, so test passing does not prove the prod payload. `csr` is not documented for IQ.
 6. `upload_attachment` goes to the **test** instance and `create_inquiry` to **prod**: an SD number from prod will not exist in test. Make sure the record and attachment target the same instance. `add_equipment` uses `_legacy_test_url()` with a different key (`pcr_api_key`).
 7. `VVX_150 = 889` is a catalog RECID that may differ per instance.

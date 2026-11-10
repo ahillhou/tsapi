@@ -43,30 +43,31 @@ def _legacy_test_url() -> str:
     return _servicedesk_url(s.pcr_test_host, s.pcr_api_key)
 
 
-def create_service_order() -> str:
-    """Create a sample Service Order in PCR360 **test**. Debug use only."""
+def create_service_order(description: str, remarks: str, sdc: int | None = None) -> dict:
+    """
+    Create a Service Order in PCR360 **test**.
 
-    remarks = (
-        "Employee Name: John Smith<br><br>"
-        "Employee NetID: jsmith27<br><br>"
-        "Phone Number: (865) 555-1234<br><br>"
-        "Date When Needed: 1/23/27<br><br>"
-        "Account Number: 8934563<br><br>"
-        "Software Only Account: No<br><br>"
-        "Phone Model Requested: VVX-150"
-    )
+    `sdc` is the Service Desk Classification RECID, which picks the
+    workflow. It is only sent when given. PCR360's docs list `sdc` for
+    IN/WO/IQ but not SO, so confirm on test that an SO accepts it.
+    """
 
     payload = {
         "type": "SO",
         "csr": 1,
-        "description": "New Voice Request",
+        "description": description,
         "remarks": remarks,
     }
 
-    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
-    response.raise_for_status()
+    if sdc is not None:
+        payload["sdc"] = sdc
 
-    return response.json()["servicedesk"]
+    response = requests.post(_test_url(), headers=HEADERS, json=payload, timeout=HTTP_TIMEOUT)
+
+    logger.info("PCR360 SO status %s: %s", response.status_code, response.text)
+
+    response.raise_for_status()
+    return response.json()
 
 
 def create_service_request(description: str, remarks: str) -> dict:

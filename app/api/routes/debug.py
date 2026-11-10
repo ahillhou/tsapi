@@ -28,7 +28,17 @@ def envtest():
 
 @router.post("/test-so")
 def test_so():
-    so_number = pcr360.create_service_order()
+    remarks = (
+        "Employee Name: John Smith<br><br>"
+        "Employee NetID: jsmith27<br><br>"
+        "Phone Number: (865) 555-1234<br><br>"
+        "Date When Needed: 1/23/27<br><br>"
+        "Account Number: 8934563<br><br>"
+        "Software Only Account: No<br><br>"
+        "Phone Model Requested: VVX-150"
+    )
+
+    so_number = pcr360.create_service_order("New Voice Request", remarks)["servicedesk"]
     equipment_result = pcr360.add_equipment(so_number)
 
     return {"service_order": so_number, "equipment_result": equipment_result}

@@ -1,7 +1,9 @@
 import base64
 
+import pytest
 from conftest import PCR_PROD_URL, PCR_TEST_URL
 
+from app.services import ringcentral_request
 from app.services.tdx_remarks import (
     build_access_request_remarks,
     build_ringcentral_request_remarks,
@@ -69,20 +71,21 @@ def test_access_request_without_data_is_rejected(client, http):
     assert http.calls == []
 
 
-# ---- /tdx/webhook (RingCentral request form -> PCR360 test SR) -----------
+# ---- /tdx/webhook (RingCentral Request form -> PCR360 test SO) -----------
 
 
-def test_ringcentral_request_creates_sr_and_uploads_attachments(client, http, ticket):
+def test_ringcentral_request_creates_so_and_uploads_attachments(client, http, ticket):
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 200
     assert response.json()["service_request"] == {"servicedesk": "SD-1"}
 
-    sr, upload_a, upload_b = http.pcr_calls()
+    so, upload_a, upload_b = http.pcr_calls()
 
-    assert sr["url"] == PCR_TEST_URL
-    assert sr["json"] == {
-        "type": "SR",
+    assert so["url"] == PCR_TEST_URL
+    assert so["headers"] == PCR_HEADERS
+    assert so["json"] == {
+        "type": "SO",
         "csr": 1,
         "description": "RingCentral New Request",
         "remarks": build_ringcentral_request_remarks(ticket),
@@ -121,6 +124,109 @@ def test_ringcentral_request_pcr_failure_is_an_error(client, http, ticket):
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 500
+
+
+def test_ringcentral_request_failure_body_skips_uploads_and_returns_502(client, http, ticket):
+    http.pcr_response = {"status": "failure", "message": "Invalid sdc"}
+
+    response = client.post("/tdx/webhook", json_body={"data": ticket})
+
+    assert response.status_code == 502
+    assert len(http.pcr_calls()) == 1  # the SO create only, no uploads
+    assert not [c for c in http.calls if "/attachments/" in c["url"]]
+
+
+def test_ringcentral_request_without_attachments(client, http, ticket):
+    ticket["Attachments"] = None
+
+    response = client.post("/tdx/webhook", json_body={"data": ticket})
+
+    assert response.status_code == 200
+    assert len(http.pcr_calls()) == 1
+
+
+def test_ringcentral_request_puts_department_in_remarks(client, http, ticket):
+    ticket["AccountName"] = "SPSF Student Health Services 115017"
+
+    client.post("/tdx/webhook", json_body={"data": ticket})
+
+    [so, *_] = http.pcr_calls()
+    assert "Department: SPSF Student Health Services 115017<br><br>" in so["json"]["remarks"]
+
+
+# ---- Department -> workflow (SDC) routing ---------------------------------
+
+
+@pytest.fixture
+def sdcs(monkeypatch):
+    monkeypatch.setattr(ringcentral_request, "DESIGN_SDC", 11)
+    monkeypatch.setattr(ringcentral_request, "DEFAULT_SDC", 22)
+
+
+@pytest.mark.parametrize(
+    "account_name",
+    [
+        # How TDX shows them: name, then the department number
+        "SPSF Student Health Services 115017",
+        "SPSF Student Counseling Services 115009",
+        "CHEW Employee Wellness 113018",
+        "OIT Technology Fee STF 111401",
+        "One Stop 103008",
+        "Athletic Information Tech 150012",
+        "Police Control 110525",
+        "VetMed Hospital Operations Administration 190500",
+        "Digital Learning 103800",
+        # Tolerate other layouts
+        "115017 - SPSF Student Health Services",
+        "Digital Learning (103800) ",
+    ],
+)
+def test_design_departments_go_to_design_sdc(client, http, ticket, sdcs, account_name):
+    ticket["AccountName"] = account_name
+
+    client.post("/tdx/webhook", json_body={"data": ticket})
+
+    [so, *_] = http.pcr_calls()
+    assert so["json"]["sdc"] == 11
+
+
+@pytest.mark.parametrize(
+    "account_name",
+    [
+        "Some Other Dept 999999",
+        "Member",
+        "",
+        None,
+        "Not a match 1150170",
+        "Not a match x115017",
+        "Not a match 11501",
+    ],
+)
+def test_other_departments_go_to_default_sdc(client, http, ticket, sdcs, account_name):
+    ticket["AccountName"] = account_name
+
+    client.post("/tdx/webhook", json_body={"data": ticket})
+
+    [so, *_] = http.pcr_calls()
+    assert so["json"]["sdc"] == 22
+
+
+def test_missing_account_name_goes_to_default_sdc(client, http, ticket, sdcs):
+    ticket.pop("AccountName", None)
+
+    client.post("/tdx/webhook", json_body={"data": ticket})
+
+    [so, *_] = http.pcr_calls()
+    assert so["json"]["sdc"] == 22
+
+
+def test_no_sdc_sent_until_configured(client, http, ticket):
+    ticket["AccountName"] = "SPSF Student Health Services 115017"
+
+    client.post("/tdx/webhook", json_body={"data": ticket})
+
+    [so, *_] = http.pcr_calls()
+    assert "sdc" not in so["json"]
 
 
 # ---- /tdx/webhook/test_access_request (PCR360 test) -----------------------

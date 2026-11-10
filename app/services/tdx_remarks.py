@@ -91,6 +91,10 @@ def build_ringcentral_request_remarks(ticket: dict) -> str:
     remarks += _line("Description", ticket["Description"])
     remarks += _line("Requestor Name", ticket["RequestorName"])
     remarks += _line("Requestor Email", ticket["RequestorEmail"])
+
+    if ticket.get("AccountName"):
+        remarks += _line("Department", ticket["AccountName"])
+
     remarks += _line("TDX Ticket ID#", ticket["ID"])
 
     return remarks
