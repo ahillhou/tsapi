@@ -72,33 +72,28 @@ def submit_ringcentral_request(ticket: dict) -> dict:
 
     remarks = build_ringcentral_request_remarks(ticket)
 
+    # Attachments go in the SO create call itself. A separate
+    # type=ATTACHMENT call made PCR360 test return HTTP 500 (2026-11-10).
+    files = []
+    for attachment in attachments:
+        file_content = download_attachment(attachment["ContentUri"])
+        logger.info("Downloaded attachment %s (%d bytes)", attachment["Name"], len(file_content))
+        files.append(pcr360.encode_file(attachment["Name"], file_content))
+
     result = pcr360.create_service_order(
         description=SERVICE_ORDER_DESCRIPTION,
         remarks=remarks,
         sdc=sdc,
+        files=files,
     )
 
     sd_number = result.get("servicedesk")
     if not sd_number or result.get("status") == "failure":
-        # Nothing to attach to; the route turns this into a 502 for TDX.
+        # The route turns this into a 502 for TDX.
         logger.error("PCR360 did not create the SO: %s", result)
         return result
 
-    logger.info("PCR360 SO number: %s", sd_number)
-
-    for attachment in attachments:
-        logger.info("Processing attachment: %s", attachment["Name"])
-
-        file_content = download_attachment(attachment["ContentUri"])
-
-        upload = pcr360.upload_attachment(
-            sd_number=sd_number,
-            filename=attachment["Name"],
-            file_content=file_content,
-        )
-
-        if upload.get("status") in ("error", "failure"):
-            logger.error("Attachment %s was not uploaded: %s", attachment["Name"], upload)
+    logger.info("PCR360 SO number: %s (sent %d attachments with it)", sd_number, len(files))
 
     return result
 

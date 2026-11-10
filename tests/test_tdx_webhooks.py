@@ -1,6 +1,7 @@
 import base64
 
 import pytest
+import requests
 from conftest import PCR_PROD_URL, PCR_TEST_URL
 
 from app.services import ringcentral_request
@@ -74,13 +75,13 @@ def test_access_request_without_data_is_rejected(client, http):
 # ---- /tdx/webhook (RingCentral Request form -> PCR360 test SO) -----------
 
 
-def test_ringcentral_request_creates_so_and_uploads_attachments(client, http, ticket):
+def test_ringcentral_request_creates_so_with_attachments_in_one_call(client, http, ticket):
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 200
     assert response.json()["service_request"] == {"servicedesk": "SD-1"}
 
-    so, upload_a, upload_b = http.pcr_calls()
+    [so] = http.pcr_calls()  # no separate ATTACHMENT calls
 
     assert so["url"] == PCR_TEST_URL
     assert so["headers"] == PCR_HEADERS
@@ -89,20 +90,11 @@ def test_ringcentral_request_creates_so_and_uploads_attachments(client, http, ti
         "csr": 1,
         "description": "RingCentral New Request",
         "remarks": build_ringcentral_request_remarks(ticket),
+        "files": [
+            {"filename": "a.pdf", "data": base64.b64encode(b"file:1").decode()},
+            {"filename": "b.png", "data": base64.b64encode(b"file:2").decode()},
+        ],
     }
-
-    for upload, name, file_id in ((upload_a, "a.pdf", "1"), (upload_b, "b.png", "2")):
-        assert upload["url"] == PCR_TEST_URL
-        assert upload["json"] == {
-            "type": "ATTACHMENT",
-            "sd_number": "SD-1",
-            "files": [
-                {
-                    "filename": name,
-                    "data": base64.b64encode(f"file:{file_id}".encode()).decode(),
-                }
-            ],
-        }
 
 
 def test_ringcentral_request_downloads_attachments_from_tdx(client, http, ticket):
@@ -126,23 +118,42 @@ def test_ringcentral_request_pcr_failure_is_an_error(client, http, ticket):
     assert response.status_code == 500
 
 
-def test_ringcentral_request_failure_body_skips_uploads_and_returns_502(client, http, ticket):
+def test_ringcentral_request_failure_body_returns_502(client, http, ticket):
     http.pcr_response = {"status": "failure", "message": "Invalid sdc"}
 
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 502
-    assert len(http.pcr_calls()) == 1  # the SO create only, no uploads
-    assert not [c for c in http.calls if "/attachments/" in c["url"]]
+    assert len(http.pcr_calls()) == 1
 
 
-def test_ringcentral_request_without_attachments(client, http, ticket):
+def test_ringcentral_request_without_attachments_sends_no_files(client, http, ticket):
     ticket["Attachments"] = None
 
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 200
-    assert len(http.pcr_calls()) == 1
+    [so] = http.pcr_calls()
+    assert "files" not in so["json"]
+
+
+def test_pcr_html_error_page_is_shortened_in_logs(client, http, ticket, caplog, monkeypatch):
+    http.pcr_status = 500
+    html = "<html>" + "x" * 5000 + "</html>"
+
+    def post(url, **kwargs):
+        response = http.post(url, **kwargs)
+        if "pcr-360.com" in url:
+            response.text = html
+        return response
+
+    monkeypatch.setattr(requests, "post", post)
+
+    with caplog.at_level("INFO", logger="app.clients.pcr360"):
+        client.post("/tdx/webhook", json_body={"data": ticket})
+
+    logged = [r.getMessage() for r in caplog.records if "SO status 500" in r.getMessage()]
+    assert logged and all(len(m) < 500 for m in logged)
 
 
 def test_ringcentral_request_puts_department_in_remarks(client, http, ticket):
