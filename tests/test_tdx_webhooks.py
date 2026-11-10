@@ -2,7 +2,7 @@ import base64
 
 import pytest
 import requests
-from conftest import PCR_PROD_URL, PCR_TEST_URL
+from conftest import PCR_PROD_URL, PCR_TEST_URL, TDX_PROD_BASE
 
 from app.services import ringcentral_request
 from app.services.tdx_remarks import (
@@ -16,19 +16,12 @@ PCR_HEADERS = {"Content-Type": "application/json", "Pcr-Html-Encoded": "TRUE"}
 # ---- /tdx/webhook/access_request (production) -----------------------------
 
 
-def test_access_request_creates_production_inquiry(client, http, ticket):
-    response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+IQ_RECID = 33359  # creating an IQ returns its RECID in "servicedesk"
+ATTACHMENT_HEADERS = {"Content-Type": "application/json"}
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "status": "processed",
-        "service_request": {"servicedesk": "SD-1"},
-    }
 
-    [call] = http.pcr_calls()
-    assert call["url"] == PCR_PROD_URL
-    assert call["headers"] == PCR_HEADERS
-    assert call["json"] == {
+def _expected_inquiry(ticket):
+    return {
         "type": "IQ",
         "email": "ahillhou@utk.edu",  # intentional, see pcr_access_request.py
         "subject": "Add PCR Access",
@@ -39,9 +32,156 @@ def test_access_request_creates_production_inquiry(client, http, ticket):
     }
 
 
-def test_access_request_makes_no_other_calls(client, http, ticket):
+def _prod_attachment(name, file_id):
+    return {
+        "type": "ATTACHMENT",
+        "sd_recid": IQ_RECID,
+        "files": [{"filename": name, "data": base64.b64encode(f"file:{file_id}".encode()).decode()}],
+    }
+
+
+@pytest.fixture
+def iq(http):
+    http.pcr_response = {"status": "success", "servicedesk": IQ_RECID}
+
+
+def test_access_request_creates_production_inquiry(client, http, ticket, iq):
+    response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "processed",
+        "service_request": {"status": "success", "servicedesk": IQ_RECID},
+    }
+
+    inquiry = http.pcr_calls()[0]
+    assert inquiry["url"] == PCR_PROD_URL
+    assert inquiry["headers"] == PCR_HEADERS
+    assert inquiry["json"] == _expected_inquiry(ticket)
+
+
+def test_access_request_without_attachments_makes_one_call(client, http, ticket, iq):
+    ticket["Attachments"] = []
+
     client.post("/tdx/webhook/access_request", json_body={"data": ticket})
 
+    [call] = http.calls
+    assert call["json"] == _expected_inquiry(ticket)
+
+
+def test_access_request_copies_attachments_from_production_tdx_to_production_pcr(
+    client, http, ticket, iq
+):
+    client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    # Exactly: inquiry, then each file downloaded from PROD TDX and attached
+    # to the PROD inquiry by RECID, without Pcr-Html-Encoded. No remark.
+    calls = [(c["method"], c["url"]) for c in http.calls]
+    assert calls == [
+        ("POST", PCR_PROD_URL),
+        ("POST", f"{TDX_PROD_BASE}/api/auth"),
+        ("GET", f"{TDX_PROD_BASE}/api/attachments/1/content"),
+        ("POST", PCR_PROD_URL),
+        ("GET", f"{TDX_PROD_BASE}/api/attachments/2/content"),
+        ("POST", PCR_PROD_URL),
+    ]
+
+    _, upload_a, upload_b = http.pcr_calls()
+    assert upload_a["headers"] == ATTACHMENT_HEADERS
+    assert upload_a["json"] == _prod_attachment("a.pdf", "1")
+    assert upload_b["headers"] == ATTACHMENT_HEADERS
+    assert upload_b["json"] == _prod_attachment("b.png", "2")
+
+
+def test_access_request_never_touches_the_tdx_sandbox_or_pcr_test(client, http, ticket, iq):
+    client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert not [c for c in http.calls if "sbtdwebapi" in c["url"] or "pcr360-test" in c["url"]]
+
+
+def _remarks(http):
+    return [c for c in http.pcr_calls() if c["json"]["type"] == "REMARKS"]
+
+
+def test_rejected_attachment_leaves_a_note_and_still_returns_200(client, http, ticket, iq):
+    http.pcr_fail_types = {"ATTACHMENT"}
+
+    response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert response.status_code == 200
+    [remark] = _remarks(http)
+    assert remark["url"] == PCR_PROD_URL
+    assert remark["headers"] == PCR_HEADERS
+    assert remark["json"] == {
+        "type": "REMARKS",
+        "sd_recid": IQ_RECID,
+        "remarks": (
+            "Attachment a.pdf could not be added (PCR360 rejected the file)<br><br>"
+            "Attachment b.png could not be added (PCR360 rejected the file)<br><br>"
+            "Please get these files from TDX Ticket ID# 777."
+        ),
+    }
+
+
+def test_file_over_50mb_is_not_downloaded_and_is_noted(client, http, ticket, iq):
+    ticket["Attachments"][0]["Size"] = 63 * 1024 * 1024
+
+    client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    downloads = [c["url"] for c in http.calls if "/attachments/" in c["url"]]
+    assert downloads == [f"{TDX_PROD_BASE}/api/attachments/2/content"]
+
+    [remark] = _remarks(http)
+    assert remark["json"]["remarks"] == (
+        "Attachment a.pdf (63.0 MB) is over the 50 MB limit and was not added<br><br>"
+        "Please get these files from TDX Ticket ID# 777."
+    )
+
+
+def test_file_that_cannot_be_downloaded_is_noted(client, http, ticket, iq):
+    http.tdx_missing_attachments = {"2"}
+
+    client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    uploads = [c for c in http.pcr_calls() if c["json"]["type"] == "ATTACHMENT"]
+    assert [u["json"]["files"][0]["filename"] for u in uploads] == ["a.pdf"]
+
+    [remark] = _remarks(http)
+    assert remark["json"]["remarks"].startswith(
+        "Attachment b.png could not be downloaded from TDX and was not added<br><br>"
+    )
+
+
+def test_failed_note_still_returns_200(client, http, ticket, iq):
+    http.pcr_fail_types = {"ATTACHMENT", "REMARKS"}
+
+    response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert response.status_code == 200
+    assert response.json()["service_request"]["servicedesk"] == IQ_RECID
+
+
+def test_unexpected_attachment_error_still_returns_200(client, http, ticket, iq, monkeypatch):
+    from app.services import pcr_access_request
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(pcr_access_request, "download_prod_attachment", boom)
+    monkeypatch.setattr(pcr_access_request.pcr360, "upload_prod_attachment", boom)
+
+    response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert response.status_code == 200
+
+
+def test_failed_inquiry_attaches_nothing(client, http, ticket):
+    http.pcr_status = 400
+    http.pcr_response = {"error": "bad topic"}
+
+    response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert response.status_code == 502
     assert len(http.calls) == 1
 
 
@@ -284,21 +424,30 @@ def test_no_sdc_sent_until_configured(client, http, ticket):
 # ---- /tdx/webhook/test_access_request (PCR360 test) -----------------------
 
 
-def test_test_access_request_uses_pcr_test(client, http, ticket):
+def test_test_access_request_uses_sandbox_tdx_and_pcr_test(client, http, ticket, iq):
+    http.pcr_fail_types = {"ATTACHMENT"}
+    ticket["Attachments"] = ticket["Attachments"][:1]
+
     response = client.post("/tdx/webhook/test_access_request", json_body={"data": ticket})
 
     assert response.status_code == 200
 
-    inquiry, upload_a, upload_b = http.pcr_calls()
+    inquiry, upload, remark = http.pcr_calls()
     assert inquiry["url"] == PCR_TEST_URL
     assert inquiry["json"]["email"] == "pat@example.edu"
     assert inquiry["json"]["topic"] == 349
 
-    # Attachments go to the inquiry number PCR360 returned
-    for upload, name in ((upload_a, "a.pdf"), (upload_b, "b.png")):
-        assert upload["url"] == PCR_TEST_URL
-        assert upload["json"]["sd_number"] == "SD-1"
-        assert upload["json"]["files"][0]["filename"] == name
+    # Attachments go to the inquiry's RECID, downloaded from the TDX sandbox
+    assert upload["url"] == PCR_TEST_URL
+    assert upload["headers"] == ATTACHMENT_HEADERS
+    assert upload["json"]["sd_recid"] == IQ_RECID
+    assert "sd_number" not in upload["json"]
+    assert remark["url"] == PCR_TEST_URL
+    assert remark["json"]["sd_recid"] == IQ_RECID
+
+    downloads = [c["url"] for c in http.calls if "/attachments/" in c["url"]]
+    assert downloads == ["https://utk.teamdynamix.com/sbtdwebapi/api/attachments/1/content"]
+    assert not [c for c in http.calls if "pcr360.utk" in c["url"] or "/tdwebapi/" in c["url"]]
 
 
 # ---- Outbound call hygiene ----------------------------------------------

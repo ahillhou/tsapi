@@ -209,43 +209,91 @@ def add_equipment(so_number: str) -> dict:
     return response.json()
 
 
-def upload_attachment(sd_number: str, filename: str, file_content: bytes) -> dict:
+def _soft_post(url: str, payload: dict, headers: dict = HEADERS) -> dict:
     """
-    Attach a file to a Service Desk record in PCR360 **test**.
-
-    Returns {"status": "error", "response": ...} instead of raising when
-    PCR360 rejects the request.
-
-    Sent WITHOUT Pcr-Html-Encoded: that header makes PCR360 HTML-decode
-    every parameter, and with the nested `files` list it answered HTTP 500
-    (2026-11-10, both here and with files on the SO create). Nothing in
-    this payload is HTML-encoded, so the header isn't needed.
+    POST that never raises: returns {"status": "error", "response": ...} on
+    a network error, an HTTP error, a non-JSON body or a "failure" body.
     """
-
-    payload = {
-        "type": "ATTACHMENT",
-        "sd_number": sd_number,
-        "files": [encode_file(filename, file_content)],
-    }
-
-    logger.info(
-        "Uploading attachment %s (%d bytes) to %s",
-        filename,
-        len(file_content),
-        sd_number,
-    )
 
     try:
-        response = _post(_test_url(), payload, headers=ATTACHMENT_HEADERS)
+        response = _post(url, payload, headers=headers)
     except PCR360Error as exc:
         return {"status": "error", "response": str(exc)}
 
-    logger.info("Attachment status %s: %s", response.status_code, _short(response))
+    logger.info("PCR360 %s status %s: %s", payload["type"], response.status_code, _short(response))
 
     if response.status_code >= 400 or not response.text.strip().startswith("{"):
-        return {
-            "status": "error",
-            "response": _short(response),
-        }
+        return {"status": "error", "response": _short(response)}
 
-    return response.json()
+    result = response.json()
+
+    if result.get("status") == "failure":
+        return {"status": "error", "response": result.get("message") or _short(response)}
+
+    return result
+
+
+def _attachment_payload(target: dict, filename: str, file_content: bytes) -> dict:
+    logger.info("Uploading attachment %s (%d bytes) to %s", filename, len(file_content), target)
+
+    return {
+        "type": "ATTACHMENT",
+        **target,
+        "files": [encode_file(filename, file_content)],
+    }
+
+
+# Attachments are sent WITHOUT Pcr-Html-Encoded: that header makes PCR360
+# HTML-decode every parameter, and with the nested `files` list it answered
+# HTTP 500 (2026-11-10). Nothing in the payload is HTML-encoded, so it isn't
+# needed. With the header removed, uploads to an SO work.
+
+
+def upload_attachment(
+    filename: str,
+    file_content: bytes,
+    *,
+    sd_number: str | None = None,
+    sd_recid: int | None = None,
+) -> dict:
+    """
+    Attach a file to a Service Desk record in PCR360 **test**.
+
+    Pass sd_number for an SO ("SO-000079") or sd_recid for an Inquiry
+    (creating an IQ returns its RECID, not an IQ number). Never raises;
+    see _soft_post().
+    """
+
+    target = {"sd_recid": sd_recid} if sd_recid is not None else {"sd_number": sd_number}
+
+    return _soft_post(
+        _test_url(),
+        _attachment_payload(target, filename, file_content),
+        headers=ATTACHMENT_HEADERS,
+    )
+
+
+def upload_prod_attachment(filename: str, file_content: bytes, *, sd_recid: int) -> dict:
+    """Attach a file to a record in PCR360 **production** by RECID. Never raises."""
+
+    return _soft_post(
+        _prod_url(),
+        _attachment_payload({"sd_recid": sd_recid}, filename, file_content),
+        headers=ATTACHMENT_HEADERS,
+    )
+
+
+def _remark_payload(sd_recid: int, remarks: str) -> dict:
+    return {"type": "REMARKS", "sd_recid": sd_recid, "remarks": remarks}
+
+
+def add_remark(sd_recid: int, remarks: str) -> dict:
+    """Add a remark to a record in PCR360 **test**. Never raises."""
+
+    return _soft_post(_test_url(), _remark_payload(sd_recid, remarks))
+
+
+def add_prod_remark(sd_recid: int, remarks: str) -> dict:
+    """Add a remark to a record in PCR360 **production**. Never raises."""
+
+    return _soft_post(_prod_url(), _remark_payload(sd_recid, remarks))

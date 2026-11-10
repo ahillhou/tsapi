@@ -40,6 +40,7 @@ PCR_TEST_URL = "https://pcr360-test.utk.pcr-360.com/api/KEY-TEST/servicedesk.jso
 PCR_PROD_URL = "https://pcr360.utk.pcr-360.com/api/KEY-PROD/servicedesk.json"
 PCR_LEGACY_URL = "https://pcr360-test.utk.pcr-360.com/api/KEY-LEGACY/servicedesk.json"
 TDX_BASE = "https://utk.teamdynamix.com/sbtdwebapi"
+TDX_PROD_BASE = "https://utk.teamdynamix.com/tdwebapi"
 
 SAMPLE_TICKET = {
     "ID": 777,
@@ -103,14 +104,20 @@ class FakeHTTP:
         self.pcr_response = {"servicedesk": "SD-1"}
         self.tdx_logins = 0
         self.tdx_reject_next = 0  # answer this many TDX API calls with 401
+        self.tdx_missing_attachments = set()  # attachment ids that 404
+        self.pcr_fail_types = set()  # PCR360 payload types answered with HTTP 500
 
     def _record(self, method, url, headers, kwargs, **extra):
         self.calls.append(
             {"method": method, "url": url, "headers": headers, "timeout": kwargs.get("timeout"), **extra}
         )
 
+    @staticmethod
+    def _is_tdx(url):
+        return url.startswith((TDX_BASE, TDX_PROD_BASE))
+
     def _tdx_rejected(self, url):
-        if url.startswith(TDX_BASE) and self.tdx_reject_next:
+        if self._is_tdx(url) and self.tdx_reject_next:
             self.tdx_reject_next -= 1
             return True
         return False
@@ -118,15 +125,18 @@ class FakeHTTP:
     def post(self, url, headers=None, json=None, **kwargs):
         self._record("POST", url, headers, kwargs, json=json)
 
-        if url == f"{TDX_BASE}/api/auth":
+        if self._is_tdx(url) and url.endswith("/api/auth"):
             self.tdx_logins += 1
             return FakeResponse(text=f"TDX-TOKEN-{self.tdx_logins}")
 
         if self._tdx_rejected(url):
             return FakeResponse(401, {})
 
-        if url.startswith(TDX_BASE):
+        if self._is_tdx(url):
             return FakeResponse(json_data=[{"ID": 777}])
+
+        if json and json.get("type") in self.pcr_fail_types:
+            return FakeResponse(500, None, text="<html>An Error has Occurred</html>")
 
         return FakeResponse(self.pcr_status, self.pcr_response)
 
@@ -140,7 +150,10 @@ class FakeHTTP:
             return FakeResponse(json_data=copy.deepcopy(SAMPLE_TICKET))
 
         if "/attachments/" in url:
-            return FakeResponse(content=b"file:" + url.rsplit("/", 2)[-2].encode())
+            file_id = url.rsplit("/", 2)[-2]
+            if file_id in self.tdx_missing_attachments:
+                return FakeResponse(404, {})
+            return FakeResponse(content=b"file:" + file_id.encode())
 
         return FakeResponse(json_data={"recid": 42})
 

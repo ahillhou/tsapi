@@ -210,3 +210,7 @@ https://solutions.teamdynamix.com/TDClient/KB/ArticleDet?ID=18979 ; https://solu
    check is enforced (and the shape might not include `Attachments`/`Attributes` for every workflow, unverified).
 10. `authenticate()` sets `Content-Type: application/json` on every request, including the attachment GET (harmless) and any future multipart upload (breaks it).
 11. Auth body keys are `UserName`/`Password` (spec casing); the TDX example uses lowercase, and both work (property matching is case-insensitive, unverified for auth).
+
+## Production vs sandbox in this project (2026-11-10)
+
+`settings.tdx_base_url` is the sandbox and is used for everything except `download_prod_attachment()`, which reads attachments from production TDX (`tdx_prod_base_url`, `https://utk.teamdynamix.com/tdwebapi`) for the production PCR account access form. Same TDX account; the client keeps one token per instance.

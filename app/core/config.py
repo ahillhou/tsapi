@@ -24,8 +24,10 @@ HTTP_TIMEOUT = (10, 60)
 
 @dataclass(frozen=True)
 class Settings:
-    # TeamDynamix
+    # TeamDynamix. tdx_base_url is the sandbox; the production API is used
+    # only to download attachments from production forms.
     tdx_base_url: str
+    tdx_prod_base_url: str
     tdx_app_id: int
     tdx_username: str | None
     tdx_password: str | None
@@ -60,6 +62,7 @@ def _env_bool(name: str) -> bool:
 def get_settings() -> Settings:
     return Settings(
         tdx_base_url="https://utk.teamdynamix.com/sbtdwebapi",
+        tdx_prod_base_url="https://utk.teamdynamix.com/tdwebapi",
         tdx_app_id=2278,
         # TDX_USERNAME/TDX_PASSWORD are preferred; USERNAME/PASSWORD are
         # what the server's .env uses today.

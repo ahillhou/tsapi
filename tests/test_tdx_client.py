@@ -18,7 +18,8 @@ def test_token_is_reused_across_calls(http):
 def test_token_is_refreshed_after_max_age(http, monkeypatch):
     tdx.get_ticket(1)
 
-    monkeypatch.setattr(tdx, "_token_issued_at", tdx._token_issued_at - tdx.TOKEN_MAX_AGE_SECONDS - 1)
+    token, issued_at = tdx._tokens[TDX_BASE]
+    tdx._tokens[TDX_BASE] = (token, issued_at - tdx.TOKEN_MAX_AGE_SECONDS - 1)
     tdx.get_ticket(2)
 
     assert len(_logins(http)) == 2
