@@ -52,6 +52,16 @@ def test_access_request_pcr_error_returns_502(client, http, ticket):
     assert response.json()["detail"]["status"] == "error"
 
 
+def test_access_request_pcr_failure_body_with_http_200_returns_502(client, http, ticket):
+    # PCR360 can report a failed write in the body while still returning 200.
+    http.pcr_response = {"status": "failure", "message": "Invalid topic"}
+
+    response = client.post("/tdx/webhook/access_request", json_body={"data": ticket})
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["message"] == "Invalid topic"
+
+
 def test_access_request_without_data_is_rejected(client, http):
     response = client.post("/tdx/webhook/access_request", json_body={"nope": {}})
 

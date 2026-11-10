@@ -26,8 +26,10 @@ router = APIRouter(
 
 def _processed(result: dict) -> dict:
     # PCR360 errors must not come back to TDX as a 200, or the failure
-    # would look like a success in the TDX workflow.
-    if result.get("status") == "error":
+    # would look like a success in the TDX workflow. PCR360 can report a
+    # failure as {"status": "failure", "message": ...} even with HTTP 200,
+    # so anything without a servicedesk number counts as failed.
+    if result.get("status") in ("error", "failure") or not result.get("servicedesk"):
         raise HTTPException(status_code=502, detail=result)
 
     return {"status": "processed", "service_request": result}
