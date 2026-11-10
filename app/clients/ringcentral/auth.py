@@ -3,6 +3,7 @@ import threading
 
 from ringcentral import SDK
 
+from app.clients.ringcentral.errors import SafePlatform
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -11,7 +12,7 @@ _platform = None
 _lock = threading.Lock()
 
 
-def get_platform():
+def get_platform() -> SafePlatform:
     """
     Return a logged-in RingCentral platform.
 
@@ -19,6 +20,9 @@ def get_platform():
     outage or bad credentials can't stop the app (and the TDX webhooks)
     from starting. If the session has expired (e.g. the refresh token aged
     out on a long-running container), log in again with the JWT.
+
+    Returned wrapped in SafePlatform so SDK errors never carry tokens or
+    the client secret into logs.
     """
     global _platform
 
@@ -29,8 +33,10 @@ def get_platform():
             sdk = SDK(s.rc_client_id, s.rc_client_secret, s.rc_server_url)
             _platform = sdk.platform()
 
-        if not _platform.logged_in():
-            logger.info("Logging in to RingCentral")
-            _platform.login(jwt=s.rc_jwt_token)
+        platform = SafePlatform(_platform)
 
-        return _platform
+        if not platform.logged_in():
+            logger.info("Logging in to RingCentral")
+            platform.login(jwt=s.rc_jwt_token)
+
+        return platform

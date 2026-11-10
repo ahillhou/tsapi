@@ -9,6 +9,8 @@ followed by an extension number, for managers). We turn the nurse's
 import logging
 
 from app.clients.ringcentral.auth import get_platform
+from app.clients.ringcentral.errors import RingCentralError
+from app.core.config import get_settings
 from app.clients.ringcentral.extensions import (
     get_extension,
     get_extension_by_number,
@@ -92,7 +94,15 @@ def handle_sms_command(extension_id: str, command: str, sender: str) -> str:
 
     try:
         send_sms(platform, sender, result)
-    except Exception:
-        logger.exception("SMS reply to %s failed", sender)
+    except RingCentralError as exc:
+        logger.error("SMS reply to %s failed: %s", sender, exc)
+        if exc.code == "MSG-304":
+            logger.error(
+                "The SMS sender %s is not an SMS-enabled number of the RingCentral "
+                "user whose JWT is in app/.env",
+                get_settings().rc_sms_from_number,
+            )
+    except Exception as exc:
+        logger.error("SMS reply to %s failed: %s", sender, type(exc).__name__)
 
     return result
