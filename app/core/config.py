@@ -50,6 +50,9 @@ class Settings:
     tdx_webhook_secret: str | None
     ringcentral_webhook_secret: str | None
 
+    # Report downloads (app/api/routes/reports.py); closed when unset
+    reports_secret: str | None
+
     # Manual testing routes in app/api/routes/debug.py
     enable_debug_routes: bool
 
@@ -82,5 +85,6 @@ def get_settings() -> Settings:
         rc_sms_from_number=os.getenv("RC_SMS_FROM_NUMBER") or "+18659740716",
         tdx_webhook_secret=os.getenv("TDX_WEBHOOK_SECRET") or None,
         ringcentral_webhook_secret=os.getenv("RINGCENTRAL_WEBHOOK_SECRET") or None,
+        reports_secret=os.getenv("REPORTS_SECRET") or None,
         enable_debug_routes=_env_bool("ENABLE_DEBUG_ROUTES"),
     )

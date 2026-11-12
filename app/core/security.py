@@ -63,6 +63,35 @@ def require_webhook_secret(
     return check
 
 
+def require_reports_secret(request: Request) -> None:
+    """
+    Reports contain staff names and emails, so unlike the webhooks they
+    are closed until REPORTS_SECRET is set, and the secret is accepted
+    only in the X-Webhook-Secret header (never the URL).
+    """
+
+    expected = get_settings().reports_secret
+
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Reports are disabled until REPORTS_SECRET is set",
+        )
+
+    provided = request.headers.get(HEADER_NAME) or ""
+
+    if not hmac.compare_digest(provided.encode(), expected.encode()):
+        logger.warning(
+            "Rejected report request %s from %s: bad or missing secret",
+            request.url.path,
+            request.client.host if request.client else "unknown",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid secret",
+        )
+
+
 tdx_webhook = require_webhook_secret("TDX", lambda s: s.tdx_webhook_secret)
 
 ringcentral_webhook = require_webhook_secret(

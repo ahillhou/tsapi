@@ -48,6 +48,7 @@ with the authenticated user's own rights. After changing scopes, create a fresh 
 | PUT .../extension/{id}/presence (dndStatus) | EditPresence (includes ReadPresence) |
 | v2 comm-handling interaction-rules GET/PATCH | a call-handling permission, name not confirmed: likely ReadCallHandling-type / EditExtensions-type scope (unverified - check "App scopes" list in console; the permissions page did not list an EditCallHandling scope) |
 | POST .../extension/~/sms | SMS (includes ReadMessages) |
+| POST /analytics/calls/v1/accounts/~/aggregation/fetch | Analytics (rate group Light; from the OpenAPI spec) |
 
 User-side rights also matter: editing another user's presence/call handling requires the
 authenticated (JWT) user to be an admin with rights over that extension (unverified).
@@ -181,7 +182,25 @@ Source: https://developers.ringcentral.com/guide/messaging/sms/sms-requirements
 Source: https://ringcentral.github.io/ringcentral-automator-docs/workflows/custom/actions/http-request ,
 https://support.ringcentral.com/engagevoice/admin/voice-admin-use-www-node.html
 
-## 9. Gotchas / improvements for this project
+## 9. Business Analytics (call counts)
+
+`POST /analytics/calls/v1/accounts/~/aggregation/fetch?page=&perPage=` (perPage max 200).
+Body: `grouping {groupBy: "Users"}`, `timeSettings {timeZone, timeRange {timeFrom,
+timeTo}}` (RFC 3339; a call counts if it started in the range), `responseOptions
+{counters {allCalls {aggregationType: "Sum"}}}`. Response: `paging {page, perPage,
+totalPages, totalElements}`, `data {groupedBy, records[]}`; each record has `key`
+(extension id), `info {extensionNumber, name}`, `counters.allCalls {valueType, values}`.
+Data covers the last 184 days. Whether users with zero calls are returned is unverified,
+so the report treats a missing user as 0 calls. Much cheaper than the call log
+(ReadCallLog, Heavy group) for per-user totals.
+
+Extension list filters `type` and `status` are confirmed in the spec (multiple values
+allowed); the list endpoint is rate group Medium.
+
+Source: https://developers.ringcentral.com/guide/analytics/aggregate and the platform
+OpenAPI spec (rc-platform.yml, operation analyticsCallsAggregationFetch).
+
+## 10. Gotchas / improvements for this project
 
 1. `get_extension_by_number` pages through every extension on each manager command (a
    1000-record page per call, Medium/Light group). Try the `extensionNumber` filter (add

@@ -9,7 +9,7 @@ import logging
 
 from fastapi import FastAPI
 
-from app.api.routes import debug, health, ringcentral, tdx
+from app.api.routes import debug, health, reports, ringcentral, tdx
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 
@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(tdx.router)
     app.include_router(ringcentral.router)
+    app.include_router(reports.router)
 
     if settings.enable_debug_routes:
         logger.warning("Debug routes are enabled (ENABLE_DEBUG_ROUTES=true)")

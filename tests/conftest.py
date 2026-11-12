@@ -25,6 +25,7 @@ TEST_ENV = {
     "RC_SMS_FROM_NUMBER": "",  # use the default sender
     "TDX_WEBHOOK_SECRET": "",
     "RINGCENTRAL_WEBHOOK_SECRET": "",
+    "REPORTS_SECRET": "",
     "ENABLE_DEBUG_ROUTES": "",
     "LOG_LEVEL": "WARNING",
 }

@@ -43,6 +43,23 @@ logged at startup. To turn a secret on without breaking anything:
 4. Submit a test form or text, and check `docker logs` for
    "Rejected ... webhook".
 
+## Reports
+
+`GET /reports/ringcentral/unused-licenses?days=180` downloads a CSV of
+enabled RingCentral users with no calls (inbound or outbound) in the last
+`days` days (default 180, max 184: RingCentral keeps 184 days of
+analytics). Use it to find licenses to reclaim.
+
+Reports are off until `REPORTS_SECRET` is set in `app/.env`, and the
+secret is only accepted in the `X-Webhook-Secret` header. The RingCentral
+app needs the **Analytics** permission (plus ReadAccounts, which it already
+has). From PowerShell on the VPN:
+
+```powershell
+Invoke-WebRequest "http://<server>:8000/reports/ringcentral/unused-licenses?days=180" `
+  -Headers @{ "X-Webhook-Secret" = "<REPORTS_SECRET>" } -OutFile unused.csv
+```
+
 ## Layout
 
 ```
@@ -67,6 +84,7 @@ and are passed with `docker run --env-file app/.env`:
 `USERNAME`, `PASSWORD` (TDX), `PCR_API_KEY`, `PCR_TEST_API_KEY`,
 `PCR_PROD_API_KEY`, `RC_CLIENT_ID`, `RC_CLIENT_SECRET`, `RC_JWT_TOKEN`.
 Optional: `TDX_WEBHOOK_SECRET`, `RINGCENTRAL_WEBHOOK_SECRET`,
+`REPORTS_SECRET` (enables `/reports/...`),
 `ENABLE_DEBUG_ROUTES` (default off), `LOG_LEVEL` (default `INFO`),
 `RC_SMS_FROM_NUMBER` (nurse SMS reply sender, default `+18659740716`, the
 number nurses text; must be an SMS number of the RingCentral JWT user).
