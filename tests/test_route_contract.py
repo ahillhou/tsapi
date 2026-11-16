@@ -13,6 +13,8 @@ LIVE_WEBHOOKS = [
     ("POST", "/tdx/webhook"),
     ("POST", "/tdx/webhook/access_request"),
     ("POST", "/tdx/webhook/test_access_request"),
+    ("POST", "/tdx/webhook/project_intake"),
+    ("POST", "/tdx/webhook/test_project_intake"),
     ("POST", "/demo/dayoff"),
     ("POST", "/ringcentral/dnd"),
     ("POST", "/ringcentral/dayoff"),

@@ -98,3 +98,33 @@ def build_ringcentral_request_remarks(ticket: dict) -> str:
     remarks += _line("TDX Ticket ID#", ticket["ID"])
 
     return remarks
+
+
+def build_project_intake_remarks(ticket: dict) -> str:
+    """
+    Remarks for the project intake form.
+
+    The form isn't built yet, so every filled-in custom field is listed
+    under its TDX name. Once the form exists, give fields friendlier labels
+    here the way the other builders do.
+    """
+
+    remarks = ""
+
+    for attr in ticket.get("Attributes") or []:
+        value = attr.get("ValueText")
+        if value not in (None, ""):
+            remarks += _line(attr.get("Name") or "Field", value)
+
+    if ticket.get("Description"):
+        remarks += _line("Description", ticket["Description"])
+
+    remarks += _line("Requestor Name", ticket.get("RequestorName"))
+    remarks += _line("Requestor Email", ticket.get("RequestorEmail"))
+
+    if ticket.get("AccountName"):
+        remarks += _line("Department", ticket["AccountName"])
+
+    remarks += _line("TDX Ticket ID#", ticket["ID"])
+
+    return remarks

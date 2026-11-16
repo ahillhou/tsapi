@@ -191,6 +191,36 @@ def test_create_inquiry(subject: str, message: str, email: str, topic: int) -> d
     return response.json()
 
 
+def _project_payload(description: str, remarks: str, csr: int, sdc: int | None) -> dict:
+    payload = {
+        "type": "PR",
+        "csr": csr,
+        "description": description,
+        "remarks": remarks,
+    }
+
+    if sdc is not None:
+        payload["sdc"] = sdc
+
+    return payload
+
+
+# type=PR creates a Project ("PR-000081"). Not in the wiki's list of write
+# types; confirmed on PCR360 test 2026-11-16.
+
+
+def create_test_project(description: str, remarks: str, csr: int, sdc: int | None = None) -> dict:
+    """Create a Project in PCR360 **test**. Never raises (see _soft_post)."""
+
+    return _soft_post(_test_url(), _project_payload(description, remarks, csr, sdc))
+
+
+def create_project(description: str, remarks: str, csr: int, sdc: int | None = None) -> dict:
+    """Create a Project in PCR360 **production**. Never raises (see _soft_post)."""
+
+    return _soft_post(_prod_url(), _project_payload(description, remarks, csr, sdc))
+
+
 def add_equipment(so_number: str) -> dict:
     """Add a VVX-150 to a Service Order in PCR360 **test**. Debug use only."""
 

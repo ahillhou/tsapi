@@ -8,6 +8,8 @@ Runs in Docker on port 8000 behind the university VIP (VPN only).
 | Route | Called by | Does |
 | --- | --- | --- |
 | `POST /tdx/webhook/access_request` | TDX PCR access form | Creates an Inquiry in PCR360 **production** |
+| `POST /tdx/webhook/project_intake` | TDX project intake form (production) | Creates a Project in PCR360 **production**, copies attachments |
+| `POST /tdx/webhook/test_project_intake` | TDX project intake form (sandbox) | Creates a Project in PCR360 test, copies attachments |
 | `POST /tdx/webhook` | TDX RingCentral request form | Creates a Service Request in PCR360 test, copies attachments |
 | `POST /demo/dayoff` | RingCentral SMS workflow | Toggles a nurse's out-of-office call rule, texts back the result |
 | `POST /ringcentral/dnd` | RingCentral workflow | Turns Do Not Disturb on/off |

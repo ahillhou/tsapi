@@ -86,7 +86,7 @@ Source: https://wiki360.pcr.com/pcr360-wiki/2025.2/service-desk-api-endpoint
 - What attachment upload expects: `sd_number` must be the bare SD number string (e.g. `"SO20160600145"`), or use `sd_recid` with the numeric id. It must not be the whole lookup JSON. Extract it from the lookup result (`servicedesk.item[0].sd_number`) or, better, reuse the `servicedesk` value returned when the record was created.
 - Alternative: query via the SQL endpoint (see below); the docs' recommended read path.
 
-## 4. SQL endpoint (`sql.json`, unused)
+## 4. SQL endpoint (`sql.json`)
 
 Source: https://wiki360.pcr.com/pcr360-wiki/2025.2/sql-api-endpoint
 
@@ -94,8 +94,14 @@ Source: https://wiki360.pcr.com/pcr360-wiki/2025.2/sql-api-endpoint
 - Body: `sql` (required, a SELECT statement), `limit` (default 20), `page` (default 1).
 - Read-only: SELECT only.
 - Response: `status`, `page`, `count`, `total_count`, `results` (array of row objects; sample shows uppercase column keys despite the "lowercase" statement).
+- Works once the API key has **SQL read** (Admin > API > API Keys > Permissions); without it every query returns HTTP 400 "The API key supplied does not allow you to execute queries." (confirmed on test 2026-11-13). `INFORMATION_SCHEMA` queries are allowed, which is the easiest way to find table and column names.
+- Useful tables: `SDC` (classifications: `RECID`, `NAME`, `SD_TYPE`), `SDC_WORKFLOW` (steps per SDC: `SDC_RECID`, `SEQUENCE`, `WORKGROUPS_RECID`), `WORKGROUPS` (`RECID`, `NAME`), `SERVICE_DESK` (`SD_NUMBER`, `SD_TYPE`, `CSR_CONTACTS_RECID`), `CONTACTS`, `USERS` / `USERS_ROLES` / `ROLES`.
 - Table/column names: see the Data Dictionary (`/pcr360-wiki/2025.2/data-dictionary`). Needs the key to carry SQL read permission (unverified how it is granted).
 - Example: `{"sql": "SELECT RECID, CODE, DESCRIPTION FROM CLASSES_OF_SERVICE"}`. This is how Classes of Service (likely what `sdc` refers to, unverified) are retrieved.
+
+### Projects (`type=PR`)
+
+Not in the wiki's list of write types, but `type=PR` with `csr`, `description`, `remarks` created `PR-000081` on PCR360 test (2026-11-16). `GET servicedesk.json?LIST=SDTYPES` (send no `Content-Type: application/json` header on GET, or it answers "Invalid JSON") lists `sd-project` = Project. Code: `create_project` (prod) / `create_test_project` (test).
 
 ## 5. Errors and status codes
 

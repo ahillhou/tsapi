@@ -17,6 +17,12 @@ from app.services.pcr_access_request import (
     submit_access_request,
     submit_test_access_request,
 )
+from app.services.pcr_project_intake import (
+    attach_project_intake_files,
+    attach_test_project_intake_files,
+    submit_project_intake,
+    submit_test_project_intake,
+)
 from app.services.ringcentral_request import submit_ringcentral_request
 
 router = APIRouter(
@@ -63,4 +69,22 @@ def test_access_request(payload: TDXWebhook, background: BackgroundTasks):
     result = submit_test_access_request(payload.data)
     response = _processed(result)
     background.add_task(attach_test_access_request_files, payload.data, result)
+    return response
+
+
+@router.post("/webhook/project_intake")
+def project_intake(payload: TDXWebhook, background: BackgroundTasks):
+    """Project intake form (production TDX) -> PCR360 (production) Project."""
+    result = submit_project_intake(payload.data)
+    response = _processed(result)
+    background.add_task(attach_project_intake_files, payload.data, result)
+    return response
+
+
+@router.post("/webhook/test_project_intake")
+def test_project_intake(payload: TDXWebhook, background: BackgroundTasks):
+    """Project intake form (TDX sandbox) -> PCR360 (test) Project."""
+    result = submit_test_project_intake(payload.data)
+    response = _processed(result)
+    background.add_task(attach_test_project_intake_files, payload.data, result)
     return response
