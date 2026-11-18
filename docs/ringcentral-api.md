@@ -200,7 +200,65 @@ allowed); the list endpoint is rate group Medium.
 Source: https://developers.ringcentral.com/guide/analytics/aggregate and the platform
 OpenAPI spec (rc-platform.yml, operation analyticsCallsAggregationFetch).
 
-## 10. Gotchas / improvements for this project
+## 10. Call queue custom rules and greetings (Parking event messages)
+
+Used by `app/clients/ringcentral/answering_rules.py`:
+`GET .../answering-rule?type=Custom&page=&perPage=` returns `records[]` with `id`,
+`type`, `name`, `enabled` (no need to GET each rule). `PUT .../answering-rule/{id}`
+with only `{"enabled": bool}` is accepted (partial bodies work; confirmed with a
+schedule-only PUT on the test queue).
+
+Seen in the admin portal (Call Queues > queue > Call Handling & Agents > Custom rules):
+a queue custom rule has Conditions (Caller ID, Called Number, Date/Time as a weekly
+schedule or a specific date range) and a Call Handling action ("Ring call queue agents",
+voicemail, play an announcement, forward). With "Ring call queue agents" the rule has its
+own Greeting & Hold Music: welcome greeting, wait announcement, waiting-in-queue music,
+hold music. So one rule can swap what callers hear and still deliver them to the queue.
+
+API (v1, from rc-platform.yml; queue use unverified until tested):
+- `GET|PUT .../extension/{queueId}/answering-rule/{ruleId}`: update takes `enabled`,
+  `schedule`, `greetings`, `queue`, `callHandlingAction`. PUT is EditExtensions, Medium.
+- `POST .../extension/{queueId}/greeting` (multipart/form-data): `type`
+  (Introductory, Announcement, ConnectingMessage, ConnectingAudio, Voicemail,
+  Unavailable, HoldMusic, TemplateGreeting), `answeringRuleId`, `binary` (the audio);
+  query `apply=true` attaches it to that rule. Max body 20 MB, rate group Heavy,
+  app permission EditExtensions.
+- Queues (type `Department`) use these v1 answering-rule endpoints; GET confirmed on a
+  live queue. Each rule's `greetings[]` entry is `{type, preset{id,name}}` or
+  `{type, custom{id}}`. Portal name -> greeting type, read from a queue's
+  business-hours rule:
+  | Portal (Greeting & Hold Music) | `type` |
+  |---|---|
+  | Welcome greeting | `Introductory` (preset "None" = off) |
+  | Waiting in queue music | `ConnectingAudio` (e.g. preset "Ring Tones") |
+  | Wait announcement | `InterruptPrompt` (not in the upload enum) |
+  | Hold music (agent puts caller on hold) | `HoldMusic` |
+  | Voicemail greeting | `Voicemail` |
+  Queue settings sit in the rule's `queue` object (`transferMode`, `fixedOrderAgents`,
+  `holdAudioInterruptionMode`, `holdTime`, `maxCallers`, ...); `callHandlingAction`
+  is `AgentQueue` for "ring agents", `TakeMessagesOnly` for voicemail.
+- For an event message: upload as `Introductory` (plays once on entering the queue)
+  and/or `ConnectingAudio` (loops while waiting, in place of the music).
+- Allowed audio formats and length: not in the spec; check the guide or test.
+
+Confirmed on a test queue (2026-11):
+- `POST .../answering-rule` with `type: Custom`, `enabled: false`, `schedule.weeklyRanges`,
+  `callHandlingAction: AgentQueue` and a `queue` object creates a working custom rule.
+  A custom rule needs a condition; schedule alone is fine.
+- `schedule: {"ref": "BusinessHours"}` on a custom rule is refused (AWR-120: only allowed
+  together with another condition). Copy `GET .../extension/{id}/business-hours`
+  (`schedule.weeklyRanges`) into the rule instead. An enabled custom rule beats the
+  business- and after-hours rules whenever its schedule matches, so a 24/7 schedule would
+  override after-hours handling.
+- The rule's `queue` is its own copy (agents, overflow); it does not follow the queue's
+  business-hours rule. Sending `queue.dispositionCodeRequired` with `wrapUpTime` < 10 is
+  refused (AWR-224); drop that field when copying a queue object back.
+- A new custom rule gets RingCentral's default greetings (Introductory "Default",
+  ConnectingAudio "Acoustic"), not the queue's.
+- User extensions on this account refuse v1 answering-rule (CMN-468,
+  NewCallHandlingAndForwarding); use v2 interaction rules for users, v1 for queues.
+
+## 11. Gotchas / improvements for this project
 
 1. `get_extension_by_number` pages through every extension on each manager command (a
    1000-record page per call, Medium/Light group). Try the `extensionNumber` filter (add

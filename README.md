@@ -13,6 +13,8 @@ Runs in Docker on port 8000 behind the university VIP (VPN only).
 | `POST /tdx/webhook` | TDX RingCentral request form | Creates a Service Request in PCR360 test, copies attachments |
 | `POST /demo/dayoff` | RingCentral SMS workflow | Toggles a nurse's out-of-office call rule, texts back the result |
 | `POST /ringcentral/dnd` | RingCentral workflow | Turns Do Not Disturb on/off |
+| `POST /ringcentral/parking_event` | RingCentral SMS workflow (Parking staff) | Turns a Parking event message on/off on queue 46031 **production**, texts back the result |
+| `POST /ringcentral/test_parking_event` | RingCentral SMS workflow (testing) | Same, on the OIT Design test queue 98765 |
 
 **These URLs must not change.** The TDX admin builds the forms and owns
 the webhook URLs configured in TDX; we can't edit them. Renaming or
@@ -62,6 +64,31 @@ Invoke-WebRequest "http://<server>:8000/reports/ringcentral/unused-licenses?days
   -Headers @{ "X-Webhook-Secret" = "<REPORTS_SECRET>" } -OutFile unused.csv
 ```
 
+## Parking event messages
+
+Parking & Transportation can switch a temporary message (football games,
+concerts, permit sales...) on and off by text. Callers hear it as soon as
+they reach the Customer Service queue (46031), before it rings the agents.
+
+Setup, done once by OIT in the RingCentral admin portal (queue > Call
+Handling & Agents > Custom rules), one rule per event:
+
+- Name it `Event - <name>`, e.g. `Event - Football`. The app only touches
+  rules named this way; the name after the dash is what staff text.
+- Condition: Date and/or Time, weekly, the queue's business hours
+  (Mon-Fri 7:30-4:30). An enabled custom rule beats the after-hours rule
+  whenever its schedule matches, so don't schedule it all day.
+- Call handling: Ring call queue agents, the event recording as the
+  welcome greeting, and the same agents, wait and voicemail settings as the
+  queue. **When the queue's routing changes, change every event rule too.**
+- Leave it turned off.
+
+Staff text the RingCentral workflow number: `FOOTBALL ON` (any other event
+goes off), `FOOTBALL OFF`, `EVENT OFF`, `STATUS`; anything else gets the
+list of commands and events. Only numbers in `PARKING_EVENT_SENDERS` are
+answered; texts from other numbers are ignored without a reply. The
+workflow posts `{"command": <text>, "sender": <phone number>}`.
+
 ## Layout
 
 ```
@@ -89,7 +116,9 @@ Optional: `TDX_WEBHOOK_SECRET`, `RINGCENTRAL_WEBHOOK_SECRET`,
 `REPORTS_SECRET` (enables `/reports/...`),
 `ENABLE_DEBUG_ROUTES` (default off), `LOG_LEVEL` (default `INFO`),
 `RC_SMS_FROM_NUMBER` (nurse SMS reply sender, default `+18659740716`, the
-number nurses text; must be an SMS number of the RingCentral JWT user).
+number nurses text; must be an SMS number of the RingCentral JWT user),
+`PARKING_EVENT_SENDERS` (comma-separated phone numbers allowed to switch
+Parking event messages; empty = nobody).
 
 ## Running locally
 

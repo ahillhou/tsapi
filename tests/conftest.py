@@ -23,6 +23,7 @@ TEST_ENV = {
     "RC_CLIENT_SECRET": "rc-secret",
     "RC_JWT_TOKEN": "rc-jwt",
     "RC_SMS_FROM_NUMBER": "",  # use the default sender
+    "PARKING_EVENT_SENDERS": "",
     "TDX_WEBHOOK_SECRET": "",
     "RINGCENTRAL_WEBHOOK_SECRET": "",
     "REPORTS_SECRET": "",

@@ -18,6 +18,8 @@ LIVE_WEBHOOKS = [
     ("POST", "/demo/dayoff"),
     ("POST", "/ringcentral/dnd"),
     ("POST", "/ringcentral/dayoff"),
+    ("POST", "/ringcentral/parking_event"),
+    ("POST", "/ringcentral/test_parking_event"),
     ("GET", "/health"),
 ]
 

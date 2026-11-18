@@ -46,6 +46,10 @@ class Settings:
     rc_jwt_token: str | None
     rc_sms_from_number: str
 
+    # Phone numbers allowed to switch Parking event messages by text
+    # (app/services/parking_events.py). Empty = nobody.
+    parking_event_senders: tuple[str, ...]
+
     # Webhook security (see app/core/security.py)
     tdx_webhook_secret: str | None
     ringcentral_webhook_secret: str | None
@@ -59,6 +63,12 @@ class Settings:
 
 def _env_bool(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_list(name: str) -> tuple[str, ...]:
+    """Comma-separated values: "a, (865) 555-0100" -> ("a", "(865) 555-0100")."""
+
+    return tuple(v.strip() for v in os.getenv(name, "").split(",") if v.strip())
 
 
 @lru_cache
@@ -83,6 +93,8 @@ def get_settings() -> Settings:
         # Replies must come from the number nurses text to trigger the
         # workflow; the JWT user must have it as an SMS-enabled number.
         rc_sms_from_number=os.getenv("RC_SMS_FROM_NUMBER") or "+18659740716",
+        # Staff phone numbers stay in app/.env, never in git (public repo).
+        parking_event_senders=_env_list("PARKING_EVENT_SENDERS"),
         tdx_webhook_secret=os.getenv("TDX_WEBHOOK_SECRET") or None,
         ringcentral_webhook_secret=os.getenv("RINGCENTRAL_WEBHOOK_SECRET") or None,
         reports_secret=os.getenv("REPORTS_SECRET") or None,

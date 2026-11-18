@@ -9,6 +9,11 @@ from fastapi.concurrency import run_in_threadpool
 from app.clients.ringcentral.presence import set_dnd
 from app.core.security import ringcentral_webhook
 from app.services.nurse_dayoff import handle_sms_command
+from app.services.parking_events import (
+    PARKING_QUEUE_ID,
+    TEST_PARKING_QUEUE_ID,
+    handle_event_sms,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,40 @@ async def demo_dayoff(request: Request):
     )
 
     return {"status": "success", "message": result}
+
+
+async def _parking_event(request: Request, queue_id: str) -> dict:
+    data = await read_ringcentral_json(request)
+
+    result = await run_in_threadpool(
+        handle_event_sms,
+        queue_id,
+        data.get("command", ""),
+        data.get("sender", ""),
+    )
+
+    if result["status"] == "failed":
+        raise HTTPException(status_code=502, detail=result["message"])
+
+    return result
+
+
+@router.post("/ringcentral/parking_event")
+async def parking_event(request: Request):
+    """
+    Parking staff text e.g. FOOTBALL ON / EVENT OFF / STATUS -> switch the
+    "Event - ..." custom rules on the **production** Parking queue (46031).
+    Body: {"command": <text>, "sender": <phone number>}.
+    """
+
+    return await _parking_event(request, PARKING_QUEUE_ID)
+
+
+@router.post("/ringcentral/test_parking_event")
+async def test_parking_event(request: Request):
+    """Same as /ringcentral/parking_event, on the **test** queue (98765)."""
+
+    return await _parking_event(request, TEST_PARKING_QUEUE_ID)
 
 
 @router.post("/ringcentral/dnd")
