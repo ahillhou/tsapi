@@ -20,11 +20,32 @@ router = APIRouter(
 )
 
 
-@router.get("/ringcentral/unused-licenses")
+@router.get(
+    "/ringcentral/unused-licenses",
+    summary="RingCentral users with no calls (CSV)",
+    response_class=Response,
+    responses={
+        200: {"content": {"text/csv": {}}, "description": "CSV file"},
+        401: {"description": "Missing or wrong secret (use Authorize)"},
+        502: {"description": "RingCentral refused or failed"},
+    },
+)
 async def unused_licenses(
-    days: int = Query(ringcentral_reports.DEFAULT_UNUSED_DAYS, ge=1, le=MAX_ANALYTICS_DAYS),
+    days: int = Query(
+        ringcentral_reports.DEFAULT_UNUSED_DAYS,
+        ge=1,
+        le=MAX_ANALYTICS_DAYS,
+        description="Look back this many days (1-184).",
+    ),
 ):
-    """CSV of enabled RingCentral users with no calls in the last `days` days."""
+    """
+    Enabled RingCentral users with no inbound or outbound calls in the last
+    `days` days: candidates for reclaiming a license.
+
+    On this page: click **Authorize**, paste the reports secret, then
+    **Try it out** > **Execute** > **Download file**. It can take a minute
+    or two for a large account.
+    """
 
     try:
         rows = await run_in_threadpool(ringcentral_reports.unused_licenses, days)

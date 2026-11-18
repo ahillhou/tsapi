@@ -19,7 +19,8 @@ import hmac
 import logging
 from collections.abc import Callable
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader
 
 from app.core.config import Settings, get_settings
 
@@ -63,7 +64,20 @@ def require_webhook_secret(
     return check
 
 
-def require_reports_secret(request: Request) -> None:
+# Declared as a security scheme so the Swagger page (/docs) shows an
+# "Authorize" button where coworkers paste the reports secret.
+reports_key = APIKeyHeader(
+    name=HEADER_NAME,
+    scheme_name="Reports secret",
+    description="The REPORTS_SECRET value. Ask Telecom Services for it.",
+    auto_error=False,
+)
+
+
+def require_reports_secret(
+    request: Request,
+    provided: str | None = Security(reports_key),
+) -> None:
     """
     Reports contain staff names and emails, so unlike the webhooks they
     are closed until REPORTS_SECRET is set, and the secret is accepted
@@ -78,7 +92,7 @@ def require_reports_secret(request: Request) -> None:
             detail="Reports are disabled until REPORTS_SECRET is set",
         )
 
-    provided = request.headers.get(HEADER_NAME) or ""
+    provided = provided or ""
 
     if not hmac.compare_digest(provided.encode(), expected.encode()):
         logger.warning(

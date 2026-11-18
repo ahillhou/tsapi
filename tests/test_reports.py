@@ -185,3 +185,22 @@ def test_missing_permission_is_502_with_reason(report_client, report_rc):
 
     assert response.status_code == 502
     assert "Analytics" in response.json()["detail"]
+
+
+def test_swagger_shows_authorize_for_reports_only():
+    from app.main import create_app
+
+    spec = create_app().openapi()
+
+    assert spec["components"]["securitySchemes"]["Reports secret"] == {
+        "type": "apiKey",
+        "description": "The REPORTS_SECRET value. Ask Telecom Services for it.",
+        "in": "header",
+        "name": "X-Webhook-Secret",
+    }
+    report = spec["paths"][PATH]["get"]
+    assert report["security"] == [{"Reports secret": []}]
+    assert "text/csv" in report["responses"]["200"]["content"]
+
+    webhook = spec["paths"]["/tdx/webhook/access_request"]["post"]
+    assert "security" not in webhook
