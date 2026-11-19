@@ -68,6 +68,7 @@ COLUMNS = [
     "Comparison",
     "Number",
     "PCR360 Status",
+    "PCR360 Pool",
     "RingCentral Type",
     "RingCentral Status",
     "RingCentral Extension",
@@ -97,17 +98,17 @@ def _rank(status: str) -> int:
     return _PCR_STATUS_PRIORITY.index(status) if status in _PCR_STATUS_PRIORITY else len(_PCR_STATUS_PRIORITY)
 
 
-def _pcr_statuses(rows: list[dict]) -> dict[str, str]:
-    """10-digit number -> PCR360 status code."""
+def _pcr_statuses(rows: list[dict]) -> dict[str, tuple[str, str]]:
+    """10-digit number -> (PCR360 status code, service pool name or "")."""
 
-    statuses: dict[str, str] = {}
+    statuses: dict[str, tuple[str, str]] = {}
 
     for row in rows:
         number = ten_digits(row.get("SERVICE_ID"))
         status = (row.get("STATUS") or "").upper()
 
-        if number and (number not in statuses or _rank(status) < _rank(statuses[number])):
-            statuses[number] = status
+        if number and (number not in statuses or _rank(status) < _rank(statuses[number][0])):
+            statuses[number] = (status, row.get("POOL") or "")
 
     return statuses
 
@@ -133,20 +134,22 @@ def build_audit(pcr_rows: list[dict], rc_numbers: list[dict]) -> list[dict]:
         seen.add(number)
 
         extension = record.get("extension") or {}
-        key = (pcr.get(number), "assigned" if extension else "unassigned")
+        status, pool = pcr.get(number, (None, ""))
+        key = (status, "assigned" if extension else "unassigned")
         rows.append(
             {
                 "_key": key,
                 "Comparison": label(*key),
                 "Number": _fmt(number),
-                "PCR360 Status": key[0] or "",
+                "PCR360 Status": status or "",
+                "PCR360 Pool": pool,
                 "RingCentral Type": record.get("usageType") or "",
                 "RingCentral Status": record.get("status") or "",
                 "RingCentral Extension": str(extension.get("extensionNumber") or ""),
             }
         )
 
-    for number, status in pcr.items():
+    for number, (status, pool) in pcr.items():
         if number not in seen:
             key = (status, None)
             rows.append(
@@ -155,6 +158,7 @@ def build_audit(pcr_rows: list[dict], rc_numbers: list[dict]) -> list[dict]:
                     "Comparison": label(*key),
                     "Number": _fmt(number),
                     "PCR360 Status": status,
+                    "PCR360 Pool": pool,
                     "RingCentral Type": "",
                     "RingCentral Status": "",
                     "RingCentral Extension": "",

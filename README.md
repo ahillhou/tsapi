@@ -72,7 +72,10 @@ key needs SQL read) or RingCentral, one row each. The **Comparison** column
 says where it is in each system, e.g. "PCR360 Available, RingCentral
 assigned", "PCR360 Active, not in RingCentral", "Not in PCR360, RingCentral
 unassigned". Numbers that agree ("PCR360 Active, RingCentral assigned") are
-left out unless `include_matches=true`.
+left out unless `include_matches=true`. The **PCR360 Pool** column is the
+number's service pool (Admin > System Tables > Service Pools), so pools never
+meant for RingCentral (e.g. RENTAL, ISDN POOL, "Do Not Port to RC") can be
+filtered out.
 
 `GET /reports/number-audit/summary` returns just the count per comparison
 (JSON), shown on the Swagger page.

@@ -24,8 +24,8 @@ def _rc(number, usage="DirectNumber", ext=None, status="Normal"):
     return record
 
 
-def _pcr(number, status):
-    return {"SERVICE_ID": number, "STATUS": status}
+def _pcr(number, status, pool="ADMIN"):
+    return {"SERVICE_ID": number, "STATUS": status, "POOL": pool}
 
 
 # ---- comparison ------------------------------------------------------------
@@ -50,7 +50,7 @@ def test_every_number_in_either_system_is_classified():
         _pcr("8650000004", "AVAILABLE"),
         _pcr("8650000005", "ACTIVE"),
         _pcr("8650000006", "INACTIVE"),
-        _pcr("8650000010", "ACTIVE"),  # not in RingCentral
+        _pcr("8650000010", "ACTIVE", None),  # not in RingCentral, in no pool
         _pcr("8650000011", "AVAILABLE"),  # not in RingCentral
         _pcr("8650000012", "ORDER_PENDING"),
         _pcr("40716", "ACTIVE"),  # too short to match a phone number: skipped
@@ -86,14 +86,17 @@ def test_every_number_in_either_system_is_classified():
         "Comparison": "PCR360 Available, RingCentral assigned",
         "Number": "865-000-0002",
         "PCR360 Status": "AVAILABLE",
+        "PCR360 Pool": "ADMIN",
         "RingCentral Type": "DirectNumber",
         "RingCentral Status": "Normal",
         "RingCentral Extension": "41000",
     }
+    assert by_number["865-000-0001"]["PCR360 Pool"] == ""  # not in PCR360
     assert {k: v for k, v in by_number["865-000-0010"].items() if k != "_key"} == {
         "Comparison": "PCR360 Active, not in RingCentral",
         "Number": "865-000-0010",
         "PCR360 Status": "ACTIVE",
+        "PCR360 Pool": "",
         "RingCentral Type": "",
         "RingCentral Status": "",
         "RingCentral Extension": "",
@@ -123,11 +126,12 @@ def test_rows_sorted_by_comparison_then_number():
     ]
 
 
-def test_duplicate_numbers_are_listed_once():
-    pcr = [_pcr("865-000-0002", "AVAILABLE"), _pcr("8650000002", "ACTIVE")]
+def test_duplicate_numbers_are_listed_once_with_the_in_use_row():
+    pcr = [_pcr("865-000-0002", "AVAILABLE", "STUDENT"), _pcr("8650000002", "ACTIVE", "RING CENTRAL")]
     rc = [_rc("+18650000002", ext="41000"), _rc("+1 865 000 0002", ext="41000")]
 
-    assert _view(build_audit(pcr, rc)) == [("PCR360 Active, RingCentral assigned", "865-000-0002")]
+    [row] = build_audit(pcr, rc)
+    assert (row["Comparison"], row["PCR360 Pool"]) == ("PCR360 Active, RingCentral assigned", "RING CENTRAL")
 
 
 # ---- PCR360 production reader -----------------------------------------------
@@ -245,10 +249,12 @@ def test_route_returns_csv_without_matches_by_default(report_client, http, numbe
 
     assert response.status_code == 200
     lines = response.body.decode().split("\r\n")
-    assert lines[0] == "Comparison,Number,PCR360 Status,RingCentral Type,RingCentral Status,RingCentral Extension"
+    assert lines[0] == (
+        "Comparison,Number,PCR360 Status,PCR360 Pool,RingCentral Type,RingCentral Status,RingCentral Extension"
+    )
     assert lines[1:] == [
-        "\"Not in PCR360, RingCentral unassigned\",865-000-0001,,CompanyNumber,Normal,",
-        "\"PCR360 Available, RingCentral assigned\",865-000-0002,AVAILABLE,DirectNumber,Normal,41000",
+        "\"Not in PCR360, RingCentral unassigned\",865-000-0001,,,CompanyNumber,Normal,",
+        "\"PCR360 Available, RingCentral assigned\",865-000-0002,AVAILABLE,ADMIN,DirectNumber,Normal,41000",
         "",
     ]
     assert [c["url"] for c in http.calls] == [PCR_PROD_SQL_URL]

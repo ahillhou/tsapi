@@ -201,18 +201,23 @@ def _sql_all(host: str, api_key: str | None, sql: str) -> list[dict]:
         page += 1
 
 
+# Each phone service is in at most one service pool (Admin > System Tables >
+# Service Pools; checked on production 2026-11-19: 25,873 numbers, none in two).
 PHONE_NUMBERS_SQL = (
-    "SELECT S.SERVICE_ID, L.CODE AS STATUS FROM SERVICES S "
+    "SELECT S.SERVICE_ID, L.CODE AS STATUS, PO.POOL_NAME AS POOL FROM SERVICES S "
     "JOIN PHONE_SERVICES P ON P.SERVICES_RECID = S.RECID "
-    "JOIN LISTS L ON L.RECID = S.SERVICE_STATUS_LISTS_RECID"
+    "JOIN LISTS L ON L.RECID = S.SERVICE_STATUS_LISTS_RECID "
+    "LEFT JOIN SERVICES_POOLS SP ON SP.SERVICES_RECID = S.RECID "
+    "LEFT JOIN POOLS PO ON PO.RECID = SP.POOLS_RECID"
 )
 
 
 def prod_phone_numbers() -> list[dict]:
     """
-    Every phone service in PCR360 **production** with its status code:
-    [{"SERVICE_ID": "8659740485", "STATUS": "AVAILABLE"}, ...]. Statuses
-    seen on test: AVAILABLE, ACTIVE, INACTIVE, ORDER_PENDING.
+    Every phone service in PCR360 **production** with its status code and
+    service pool: [{"SERVICE_ID": "8659740485", "STATUS": "AVAILABLE",
+    "POOL": "ADMIN"}, ...]. POOL is None for a number in no pool. Statuses
+    seen: AVAILABLE, ACTIVE, INACTIVE, ORDER_PENDING.
 
     Read-only (sql.json); the production key needs SQL read.
     """
