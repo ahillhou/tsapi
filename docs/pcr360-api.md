@@ -38,14 +38,17 @@ Success response (write):
 ```
 Note HTTP status may still be 200 for a "failure" body (unverified). Check `status` in the body, not only the HTTP code.
 
-### SO (Service Order) - used by `create_service_order` (RingCentral Request form via `/tdx/webhook`, PCR360 test)
+### SO (Service Order) - used by `create_service_order` (debug route only; the RingCentral form now creates an SR)
 - Required: `type=SO`, `csr` (RECID of the customer service rep).
-- We also send `sdc` (Service Desk Classification, which picks the workflow) once `DESIGN_SDC`/`DEFAULT_SDC` are set in `app/services/ringcentral_request.py`. The 2025.2 docs list `sdc` only for IN/WO/IQ, so whether SO honours it is (unverified) until tested on PCR360 test.
+- `sdc` is optional in our client. The 2025.2 docs list `sdc` only for IN/WO/IQ. On an SO, SDCs live on **actions** (`SERVICE_DESK_ACTIONS.SDC_RECID`, added with `type=ACTION`, `sd_action`, `catalog`, `sdc`), not on the SO itself.
 - Useful optional: `description`, `remarks`, `due_date`, `source`, `urgency`, `requestor`, `owner` + `owner_type` (`contact` or `department`), `assoc_proj`, `udf_*` fields.
 - `status` may be set to `complete` or `finalize`; finalizing needs `finalized_date` (mm/dd/yyyy) and bills from that date. Completing needs `owner`. Do not set these casually.
 
-### SR (Service Request) - used by `create_service_request`
-- NOT documented as a write type on the 2025.2 page. The page's examples only list SO, IN, ES (an error message lists "valid options are: SO, IN, ES") plus WO. "Service Request" appears only as an SD type name in a UDF example. Whether `type=SR` works depends on the instance's SDTYPES list (unverified). Fields we send: `csr`, `description`, `remarks`.
+### SR (Service Request) - used by `create_service_request` (RingCentral Request form via `/tdx/webhook`, PCR360 test)
+- NOT documented as a write type on the 2025.2 page, but `type=SR` with `csr`, `description`, `remarks` created SR-000073..76 on PCR360 test (2026-11-02). Numbers look like `SR-0000NN`.
+- We also send `sdc` once `DESIGN_SDC`/`DEFAULT_SDC` are set in `app/services/ringcentral_request.py` (design departments vs everyone else). SDCs for SRs have `SDC.SD_TYPE = 'sd-service-request'`.
+- How an SDC shows up: an inquiry created with `sdc` (IQ00000028 on test) got the SDC's steps copied into `SERVICE_DESK_WORKFLOW` (`SOURCE_TABLE_NAME = 'SDC_WORKFLOW'`, `WORKGROUPS_RECID` set, `WORKER_CONTACTS_RECID` null, no action). Whether an SR does the same is (unverified) until the first SR with `sdc` on test. Check with:
+  `SELECT W.SEQUENCE, W.WORKGROUPS_RECID, W.WORKER_CONTACTS_RECID, W.SERVICE_DESK_ACTIONS_RECID FROM SERVICE_DESK_WORKFLOW W JOIN SERVICE_DESK S ON S.RECID = W.SERVICE_DESK_RECID WHERE S.SD_NUMBER = 'SR-0000NN'`
 
 ### IQ (Inquiry) - used by `create_inquiry` / `test_create_inquiry`
 - Create requires: `subject`, `message`, `topic` (RECID from the SD_INQTOPICS list), `email` (unless token auth supplies the user).

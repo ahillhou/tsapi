@@ -1,4 +1,4 @@
-"""TDX "RingCentral Request" form -> PCR360 Service Order (test)."""
+"""TDX "RingCentral Request" form -> PCR360 Service Request (test)."""
 
 import logging
 import re
@@ -12,7 +12,7 @@ from app.services.tdx_remarks import (
 
 logger = logging.getLogger(__name__)
 
-SERVICE_ORDER_DESCRIPTION = "RingCentral New Request"
+REQUEST_DESCRIPTION = "RingCentral New Request"
 
 # Departments whose requests go to the OIT Communications Design group's
 # workflow. Matched on the 6-digit department number in the ticket's
@@ -30,10 +30,12 @@ DESIGN_DEPARTMENTS = {
     "103800": "Digital Learning",
 }
 
-# PCR360 (test) Service Desk Classification RECIDs. Each one selects a
-# workflow. None = not created yet, so no sdc is sent.
-DESIGN_SDC: int | None = None
-DEFAULT_SDC: int | None = None
+# PCR360 (test) Service Desk Classification RECIDs (type Service Request).
+# Each one's workflow steps assign the request to a workgroup. None = not
+# created yet, so no sdc is sent. Look them up with:
+#   SELECT RECID, NAME, SD_TYPE FROM SDC WHERE SD_TYPE = 'sd-service-request'
+DESIGN_SDC: int | None = 7  # "SDC Design Test" -> Inventory Group (test stand-in)
+DEFAULT_SDC: int | None = 8  # "SDC CSR Test" -> Customer Service Group
 
 _DEPARTMENT_NUMBER = re.compile(r"\b(\d{6})\b")
 
@@ -54,7 +56,7 @@ def choose_sdc(ticket: dict) -> int | None:
 
 
 def submit_ringcentral_request(ticket: dict) -> dict:
-    """Create the Service Order and copy the ticket's attachments to it."""
+    """Create the Service Request and copy the ticket's attachments to it."""
 
     attachments = ticket.get("Attachments") or []
     design = is_design_department(ticket)
@@ -72,11 +74,11 @@ def submit_ringcentral_request(ticket: dict) -> dict:
 
     remarks = build_ringcentral_request_remarks(ticket)
 
-    # Create the SO first, then attach files one call each. Sending files
-    # with the create made PCR360 fail the whole SO (HTTP 500, 2026-11-10);
-    # this way a bad attachment never costs us the SO.
-    result = pcr360.create_service_order(
-        description=SERVICE_ORDER_DESCRIPTION,
+    # Create the SR first, then attach files one call each. Sending files
+    # with the create made PCR360 fail the whole record (HTTP 500 on an SO,
+    # 2026-11-10); this way a bad attachment never costs us the request.
+    result = pcr360.create_service_request(
+        description=REQUEST_DESCRIPTION,
         remarks=remarks,
         sdc=sdc,
     )
@@ -84,10 +86,10 @@ def submit_ringcentral_request(ticket: dict) -> dict:
     sd_number = result.get("servicedesk")
     if not sd_number or result.get("status") == "failure":
         # The route turns this into a 502 for TDX.
-        logger.error("PCR360 did not create the SO: %s", result)
+        logger.error("PCR360 did not create the SR: %s", result)
         return result
 
-    logger.info("PCR360 SO number: %s", sd_number)
+    logger.info("PCR360 SR number: %s", sd_number)
 
     for attachment in attachments:
         file_content = download_attachment(attachment["ContentUri"])

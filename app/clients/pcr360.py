@@ -122,8 +122,15 @@ def create_service_order(
     return response.json()
 
 
-def create_service_request(description: str, remarks: str) -> dict:
-    """Create a Service Request in PCR360 **test**."""
+def create_service_request(description: str, remarks: str, sdc: int | None = None) -> dict:
+    """
+    Create a Service Request in PCR360 **test**.
+
+    `sdc` is the Service Desk Classification RECID; it is only sent when
+    given. Like an inquiry's SDC, it should copy the SDC's workflow steps
+    (workgroups) onto the record (SERVICE_DESK_WORKFLOW). Not in the wiki's
+    list of write types, but type=SR created SR-000073..76 on test.
+    """
 
     payload = {
         "type": "SR",
@@ -132,9 +139,14 @@ def create_service_request(description: str, remarks: str) -> dict:
         "remarks": remarks,
     }
 
-    response = _post(_test_url(), payload)
-    _raise_for_status(response)
+    if sdc is not None:
+        payload["sdc"] = sdc
 
+    response = _post(_test_url(), payload)
+
+    logger.info("PCR360 SR status %s: %s", response.status_code, _short(response))
+
+    _raise_for_status(response)
     return response.json()
 
 

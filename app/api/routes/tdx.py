@@ -45,7 +45,7 @@ def _processed(result: dict) -> dict:
 
 @router.post("/webhook")
 def ringcentral_request(payload: TDXWebhook):
-    """RingCentral Request form -> PCR360 (test) Service Order with attachments."""
+    """RingCentral Request form -> PCR360 (test) Service Request with attachments."""
     return _processed(submit_ringcentral_request(payload.data))
 
 

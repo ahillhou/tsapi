@@ -212,10 +212,10 @@ def test_access_request_without_data_is_rejected(client, http):
     assert http.calls == []
 
 
-# ---- /tdx/webhook (RingCentral Request form -> PCR360 test SO) -----------
+# ---- /tdx/webhook (RingCentral Request form -> PCR360 test SR) -----------
 
 
-def test_ringcentral_request_creates_so_then_uploads_attachments(client, http, ticket):
+def test_ringcentral_request_creates_sr_then_uploads_attachments(client, http, ticket):
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 200
@@ -226,10 +226,11 @@ def test_ringcentral_request_creates_so_then_uploads_attachments(client, http, t
     assert so["url"] == PCR_TEST_URL
     assert so["headers"] == PCR_HEADERS
     assert so["json"] == {
-        "type": "SO",
+        "type": "SR",
         "csr": 1,
         "description": "RingCentral New Request",
         "remarks": build_ringcentral_request_remarks(ticket),
+        "sdc": 8,  # no department on the sample ticket -> CSR (default) SDC
     }
 
     for upload, name, file_id in ((upload_a, "a.pdf", "1"), (upload_b, "b.png", "2")):
@@ -248,7 +249,7 @@ def test_ringcentral_request_creates_so_then_uploads_attachments(client, http, t
         }
 
 
-def test_failed_attachment_still_returns_the_so(client, http, ticket, monkeypatch):
+def test_failed_attachment_still_returns_the_sr(client, http, ticket, monkeypatch):
     def post(url, **kwargs):
         response = http.post(url, **kwargs)
         if kwargs["json"].get("type") == "ATTACHMENT":
@@ -333,7 +334,7 @@ def test_pcr_html_error_page_is_shortened_in_logs(client, http, ticket, caplog, 
     with caplog.at_level("INFO", logger="app.clients.pcr360"):
         client.post("/tdx/webhook", json_body={"data": ticket})
 
-    logged = [r.getMessage() for r in caplog.records if "SO status 500" in r.getMessage()]
+    logged = [r.getMessage() for r in caplog.records if "SR status 500" in r.getMessage()]
     assert logged and all(len(m) < 500 for m in logged)
 
 
@@ -412,7 +413,41 @@ def test_missing_account_name_goes_to_default_sdc(client, http, ticket, sdcs):
     assert so["json"]["sdc"] == 22
 
 
-def test_no_sdc_sent_until_configured(client, http, ticket):
+def test_design_request_exact_payload(client, http, ticket, sdcs):
+    ticket["AccountName"] = "One Stop 103008"
+
+    client.post("/tdx/webhook", json_body={"data": ticket})
+
+    [sr, *_] = http.pcr_calls()
+    assert sr["url"] == PCR_TEST_URL
+    assert sr["json"] == {
+        "type": "SR",
+        "csr": 1,
+        "description": "RingCentral New Request",
+        "remarks": build_ringcentral_request_remarks(ticket),
+        "sdc": 11,
+    }
+
+
+@pytest.mark.parametrize(
+    "account_name, sdc",
+    [
+        ("One Stop 103008", 7),  # SDC Design Test on PCR360 test
+        ("Some Other Dept 999999", 8),  # SDC CSR Test on PCR360 test
+    ],
+)
+def test_pcr_test_sdc_recids(client, http, ticket, account_name, sdc):
+    ticket["AccountName"] = account_name
+
+    client.post("/tdx/webhook", json_body={"data": ticket})
+
+    [sr, *_] = http.pcr_calls()
+    assert sr["json"]["sdc"] == sdc
+
+
+def test_no_sdc_sent_when_unset(client, http, ticket, monkeypatch):
+    monkeypatch.setattr(ringcentral_request, "DESIGN_SDC", None)
+    monkeypatch.setattr(ringcentral_request, "DEFAULT_SDC", None)
     ticket["AccountName"] = "SPSF Student Health Services 115017"
 
     client.post("/tdx/webhook", json_body={"data": ticket})
