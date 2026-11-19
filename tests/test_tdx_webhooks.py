@@ -1,8 +1,9 @@
 import base64
+import re
 
 import pytest
 import requests
-from conftest import PCR_PROD_URL, PCR_TEST_URL, TDX_PROD_BASE
+from conftest import PCR_PROD_URL, PCR_TEST_SQL_URL, PCR_TEST_URL, TDX_PROD_BASE
 
 from app.services import ringcentral_request
 from app.services.tdx_remarks import (
@@ -221,7 +222,7 @@ def test_ringcentral_request_creates_sr_then_uploads_attachments(client, http, t
     assert response.status_code == 200
     assert response.json()["service_request"] == {"servicedesk": "SD-1"}
 
-    so, upload_a, upload_b = http.pcr_calls()
+    so, lookup, step, upload_a, upload_b = http.pcr_calls()
 
     assert so["url"] == PCR_TEST_URL
     assert so["headers"] == PCR_HEADERS
@@ -230,7 +231,25 @@ def test_ringcentral_request_creates_sr_then_uploads_attachments(client, http, t
         "csr": 1,
         "description": "RingCentral New Request",
         "remarks": build_ringcentral_request_remarks(ticket),
-        "sdc": 8,  # no department on the sample ticket -> CSR (default) SDC
+    }
+
+    # No department on the sample ticket -> SDC 8 (CSR Test); its steps are
+    # read with SQL and copied onto the SR (PCR360 ignores sdc on an SR).
+    assert lookup["url"] == PCR_TEST_SQL_URL
+    assert lookup["headers"] == PCR_HEADERS
+    assert lookup["json"] == {
+        "sql": "SELECT SEQUENCE, WORKGROUPS_RECID, WORKER_CONTACTS_RECID "
+        "FROM SDC_WORKFLOW WHERE SDC_RECID = 8 ORDER BY SEQUENCE",
+        "limit": 100,
+    }
+    assert step["url"] == PCR_TEST_URL
+    assert step["json"] == {
+        "type": "WORKFLOW",
+        "sd_number": "SD-1",
+        "sequence": 100,
+        "workgroup": 6,
+        "billable": 0,
+        "status": "PENDING",
     }
 
     for upload, name, file_id in ((upload_a, "a.pdf", "1"), (upload_b, "b.png", "2")):
@@ -315,8 +334,9 @@ def test_ringcentral_request_without_attachments_sends_no_files(client, http, ti
     response = client.post("/tdx/webhook", json_body={"data": ticket})
 
     assert response.status_code == 200
-    [so] = http.pcr_calls()
-    assert "files" not in so["json"]
+    calls = http.pcr_calls()
+    assert [c["json"].get("type") for c in calls] == ["SR", None, "WORKFLOW"]
+    assert "files" not in calls[0]["json"]
 
 
 def test_pcr_html_error_page_is_shortened_in_logs(client, http, ticket, caplog, monkeypatch):
@@ -350,6 +370,11 @@ def test_ringcentral_request_puts_department_in_remarks(client, http, ticket):
 # ---- Department -> workflow (SDC) routing ---------------------------------
 
 
+def _sdc_looked_up(http):
+    [lookup] = [c for c in http.pcr_calls() if c["url"].endswith("/sql.json")]
+    return int(re.search(r"SDC_RECID = (\d+)", lookup["json"]["sql"]).group(1))
+
+
 @pytest.fixture
 def sdcs(monkeypatch):
     monkeypatch.setattr(ringcentral_request, "DESIGN_SDC", 11)
@@ -379,8 +404,7 @@ def test_design_departments_go_to_design_sdc(client, http, ticket, sdcs, account
 
     client.post("/tdx/webhook", json_body={"data": ticket})
 
-    [so, *_] = http.pcr_calls()
-    assert so["json"]["sdc"] == 11
+    assert _sdc_looked_up(http) == 11
 
 
 @pytest.mark.parametrize(
@@ -400,8 +424,7 @@ def test_other_departments_go_to_default_sdc(client, http, ticket, sdcs, account
 
     client.post("/tdx/webhook", json_body={"data": ticket})
 
-    [so, *_] = http.pcr_calls()
-    assert so["json"]["sdc"] == 22
+    assert _sdc_looked_up(http) == 22
 
 
 def test_missing_account_name_goes_to_default_sdc(client, http, ticket, sdcs):
@@ -409,24 +432,67 @@ def test_missing_account_name_goes_to_default_sdc(client, http, ticket, sdcs):
 
     client.post("/tdx/webhook", json_body={"data": ticket})
 
-    [so, *_] = http.pcr_calls()
-    assert so["json"]["sdc"] == 22
+    assert _sdc_looked_up(http) == 22
 
 
-def test_design_request_exact_payload(client, http, ticket, sdcs):
+def test_every_sdc_step_is_copied_in_order(client, http, ticket, sdcs):
     ticket["AccountName"] = "One Stop 103008"
+    ticket["Attachments"] = []
+    http.sql_results = [
+        {"SEQUENCE": "100", "WORKGROUPS_RECID": "9", "WORKER_CONTACTS_RECID": None},
+        {"SEQUENCE": "200", "WORKGROUPS_RECID": "13", "WORKER_CONTACTS_RECID": "566"},
+    ]
 
-    client.post("/tdx/webhook", json_body={"data": ticket})
+    response = client.post("/tdx/webhook", json_body={"data": ticket})
 
-    [sr, *_] = http.pcr_calls()
-    assert sr["url"] == PCR_TEST_URL
-    assert sr["json"] == {
-        "type": "SR",
-        "csr": 1,
-        "description": "RingCentral New Request",
-        "remarks": build_ringcentral_request_remarks(ticket),
-        "sdc": 11,
-    }
+    assert response.status_code == 200
+    assert _sdc_looked_up(http) == 11
+    steps = [c["json"] for c in http.pcr_calls() if c["json"].get("type") == "WORKFLOW"]
+    assert steps == [
+        {"type": "WORKFLOW", "sd_number": "SD-1", "sequence": 100, "workgroup": 9,
+         "billable": 0, "status": "PENDING"},
+        {"type": "WORKFLOW", "sd_number": "SD-1", "sequence": 200, "workgroup": 13,
+         "billable": 0, "status": "PENDING", "worker": 566},
+    ]
+    assert not [c for c in http.pcr_calls() if c["json"].get("type") == "REMARKS"]
+
+
+def _remark_texts(http):
+    return [c["json"]["remarks"] for c in http.pcr_calls() if c["json"].get("type") == "REMARKS"]
+
+
+def test_failed_step_leaves_a_remark_and_keeps_the_sr(client, http, ticket, sdcs):
+    ticket["Attachments"] = []
+    http.pcr_fail_types = {"WORKFLOW"}
+
+    response = client.post("/tdx/webhook", json_body={"data": ticket})
+
+    assert response.status_code == 200
+    assert response.json()["service_request"] == {"servicedesk": "SD-1"}
+    assert _remark_texts(http) == [
+        "SDC 22: workflow step(s) 100 could not be added. "
+        "Please assign this request to its workgroup manually."
+    ]
+
+
+@pytest.mark.parametrize(
+    "fail, problem",
+    [
+        ({"sql_status": 400}, "its workflow could not be read"),
+        ({"sql_response": {"status": "failure", "message": "no SQL permission"}}, "its workflow could not be read"),
+        ({"sql_results": []}, "it has no workflow steps"),
+    ],
+)
+def test_unreadable_or_empty_sdc_leaves_a_remark(client, http, ticket, sdcs, fail, problem):
+    ticket["Attachments"] = []
+    for key, value in fail.items():
+        setattr(http, key, value)
+
+    response = client.post("/tdx/webhook", json_body={"data": ticket})
+
+    assert response.status_code == 200
+    assert not [c for c in http.pcr_calls() if c["json"].get("type") == "WORKFLOW"]
+    assert _remark_texts(http) == [f"SDC 22: {problem}. Please assign this request to its workgroup manually."]
 
 
 @pytest.mark.parametrize(
@@ -441,8 +507,7 @@ def test_pcr_test_sdc_recids(client, http, ticket, account_name, sdc):
 
     client.post("/tdx/webhook", json_body={"data": ticket})
 
-    [sr, *_] = http.pcr_calls()
-    assert sr["json"]["sdc"] == sdc
+    assert _sdc_looked_up(http) == sdc
 
 
 def test_no_sdc_sent_when_unset(client, http, ticket, monkeypatch):
@@ -452,8 +517,8 @@ def test_no_sdc_sent_when_unset(client, http, ticket, monkeypatch):
 
     client.post("/tdx/webhook", json_body={"data": ticket})
 
-    [so, *_] = http.pcr_calls()
-    assert "sdc" not in so["json"]
+    assert [c["json"].get("type") for c in http.pcr_calls()][:2] == ["SR", "ATTACHMENT"]
+    assert not [c for c in http.pcr_calls() if c["url"].endswith("/sql.json")]
 
 
 # ---- /tdx/webhook/test_access_request (PCR360 test) -----------------------

@@ -122,14 +122,14 @@ def create_service_order(
     return response.json()
 
 
-def create_service_request(description: str, remarks: str, sdc: int | None = None) -> dict:
+def create_service_request(description: str, remarks: str) -> dict:
     """
     Create a Service Request in PCR360 **test**.
 
-    `sdc` is the Service Desk Classification RECID; it is only sent when
-    given. Like an inquiry's SDC, it should copy the SDC's workflow steps
-    (workgroups) onto the record (SERVICE_DESK_WORKFLOW). Not in the wiki's
-    list of write types, but type=SR created SR-000073..76 on test.
+    Not in the wiki's list of write types, but type=SR works on test
+    (SR-000073..76, SR-000096). PCR360 ignores `sdc` on an SR (it created
+    SR-000096 with no workflow, 2026-11-19), so an SDC's workflow is copied
+    on afterwards with sdc_workflow_steps() + add_workflow_step().
     """
 
     payload = {
@@ -139,15 +139,84 @@ def create_service_request(description: str, remarks: str, sdc: int | None = Non
         "remarks": remarks,
     }
 
-    if sdc is not None:
-        payload["sdc"] = sdc
-
     response = _post(_test_url(), payload)
 
     logger.info("PCR360 SR status %s: %s", response.status_code, _short(response))
 
     _raise_for_status(response)
     return response.json()
+
+
+def _sql_url(host: str, api_key: str | None) -> str:
+    return f"{host}/api/{api_key}/sql.json"
+
+
+SDC_STEPS_SQL = (
+    "SELECT SEQUENCE, WORKGROUPS_RECID, WORKER_CONTACTS_RECID "
+    "FROM SDC_WORKFLOW WHERE SDC_RECID = {sdc} ORDER BY SEQUENCE"
+)
+
+
+def _int_or_none(value) -> int | None:
+    return int(value) if value not in (None, "") else None
+
+
+def sdc_workflow_steps(sdc: int) -> list[dict]:
+    """
+    The workflow steps defined on an SDC in PCR360 **test**, in order:
+    [{"sequence": 100, "workgroup": 9, "worker": None}, ...].
+
+    Read with the SQL endpoint (the API key needs SQL read). Raises
+    PCR360Error if the query fails.
+    """
+
+    payload = {"sql": SDC_STEPS_SQL.format(sdc=int(sdc)), "limit": 100}
+    s = get_settings()
+
+    response = _post(_sql_url(s.pcr_test_host, s.pcr_test_api_key), payload)
+
+    logger.info("PCR360 SDC %s workflow status %s: %s", sdc, response.status_code, _short(response))
+
+    _raise_for_status(response)
+    result = response.json()
+
+    if result.get("status") != "success":
+        raise PCR360Error(f"PCR360 SDC {sdc} workflow query failed: {result.get('message')}")
+
+    return [
+        {
+            "sequence": int(row["SEQUENCE"]),
+            "workgroup": int(row["WORKGROUPS_RECID"]),
+            "worker": _int_or_none(row.get("WORKER_CONTACTS_RECID")),
+        }
+        for row in result.get("results") or []
+    ]
+
+
+def add_workflow_step(
+    sd_number: str, sequence: int, workgroup: int, worker: int | None = None
+) -> dict:
+    """
+    Add a Pending workflow step to a record in PCR360 **test**. Never raises.
+
+    The wiki lists sda_recid/sda_number (an action) as required, but a step
+    on the record itself works: SR-000096 got one with no action
+    (2026-11-19), the same shape an inquiry's SDC produces.
+    """
+
+    payload = {
+        "type": "WORKFLOW",
+        "sd_number": sd_number,
+        "sequence": sequence,
+        "workgroup": workgroup,
+        "billable": 0,
+        "status": "PENDING",
+    }
+
+    if worker is not None:
+        payload["worker"] = worker
+
+    return _soft_post(_test_url(), payload)
 
 
 def create_inquiry(subject: str, message: str, email: str, topic: int) -> dict:

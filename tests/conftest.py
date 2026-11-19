@@ -40,6 +40,7 @@ from app.clients.ringcentral import auth as rc_auth  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 
 PCR_TEST_URL = "https://pcr360-test.utk.pcr-360.com/api/KEY-TEST/servicedesk.json"
+PCR_TEST_SQL_URL = "https://pcr360-test.utk.pcr-360.com/api/KEY-TEST/sql.json"
 PCR_PROD_URL = "https://pcr360.utk.pcr-360.com/api/KEY-PROD/servicedesk.json"
 PCR_LEGACY_URL = "https://pcr360-test.utk.pcr-360.com/api/KEY-LEGACY/servicedesk.json"
 TDX_BASE = "https://utk.teamdynamix.com/sbtdwebapi"
@@ -109,6 +110,10 @@ class FakeHTTP:
         self.tdx_reject_next = 0  # answer this many TDX API calls with 401
         self.tdx_missing_attachments = set()  # attachment ids that 404
         self.pcr_fail_types = set()  # PCR360 payload types answered with HTTP 500
+        # Answer to every sql.json query: one SDC workflow step by default.
+        self.sql_status = 200
+        self.sql_response = None  # overrides the body below when set
+        self.sql_results = [{"SEQUENCE": "100", "WORKGROUPS_RECID": "6", "WORKER_CONTACTS_RECID": None}]
 
     def _record(self, method, url, headers, kwargs, **extra):
         self.calls.append(
@@ -137,6 +142,10 @@ class FakeHTTP:
 
         if self._is_tdx(url):
             return FakeResponse(json_data=[{"ID": 777}])
+
+        if url.endswith("/sql.json"):
+            body = self.sql_response or {"status": "success", "results": self.sql_results}
+            return FakeResponse(self.sql_status, body)
 
         if json and json.get("type") in self.pcr_fail_types:
             return FakeResponse(500, None, text="<html>An Error has Occurred</html>")

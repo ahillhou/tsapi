@@ -55,6 +55,54 @@ def choose_sdc(ticket: dict) -> int | None:
     return DESIGN_SDC if is_design_department(ticket) else DEFAULT_SDC
 
 
+def apply_sdc_workflow(sd_number: str, sdc: int) -> None:
+    """
+    Copy an SDC's workflow steps onto a new Service Request.
+
+    PCR360 ignores `sdc` when creating an SR, so the steps are read from the
+    SDC (SDC_WORKFLOW) and added one by one. Editing the SDC's workflow in
+    PCR360 changes what new requests get, with no code change. Never raises:
+    the SR already exists, so a failure leaves a remark on it instead.
+    """
+
+    try:
+        steps = pcr360.sdc_workflow_steps(sdc)
+    except pcr360.PCR360Error as exc:
+        logger.error("Could not read SDC %s workflow for %s: %s", sdc, sd_number, exc)
+        steps = None
+
+    if steps is None:
+        _workflow_remark(sd_number, sdc, "its workflow could not be read")
+        return
+
+    if not steps:
+        logger.warning("SDC %s has no workflow steps; %s has no workflow", sdc, sd_number)
+        _workflow_remark(sd_number, sdc, "it has no workflow steps")
+        return
+
+    failed = []
+
+    for step in steps:
+        added = pcr360.add_workflow_step(sd_number, **step)
+
+        if added.get("status") in ("error", "failure"):
+            logger.error("Workflow step %s was not added to %s: %s", step, sd_number, added)
+            failed.append(step)
+
+    logger.info("SDC %s: %d of %d workflow steps added to %s", sdc, len(steps) - len(failed), len(steps), sd_number)
+
+    if failed:
+        flows = ", ".join(str(step["sequence"]) for step in failed)
+        _workflow_remark(sd_number, sdc, f"workflow step(s) {flows} could not be added")
+
+
+def _workflow_remark(sd_number: str, sdc: int, problem: str) -> None:
+    pcr360.add_remark(
+        f"SDC {sdc}: {problem}. Please assign this request to its workgroup manually.",
+        sd_number=sd_number,
+    )
+
+
 def submit_ringcentral_request(ticket: dict) -> dict:
     """Create the Service Request and copy the ticket's attachments to it."""
 
@@ -80,7 +128,6 @@ def submit_ringcentral_request(ticket: dict) -> dict:
     result = pcr360.create_service_request(
         description=REQUEST_DESCRIPTION,
         remarks=remarks,
-        sdc=sdc,
     )
 
     sd_number = result.get("servicedesk")
@@ -90,6 +137,9 @@ def submit_ringcentral_request(ticket: dict) -> dict:
         return result
 
     logger.info("PCR360 SR number: %s", sd_number)
+
+    if sdc is not None:
+        apply_sdc_workflow(sd_number, sdc)
 
     for attachment in attachments:
         file_content = download_attachment(attachment["ContentUri"])

@@ -46,8 +46,9 @@ Note HTTP status may still be 200 for a "failure" body (unverified). Check `stat
 
 ### SR (Service Request) - used by `create_service_request` (RingCentral Request form via `/tdx/webhook`, PCR360 test)
 - NOT documented as a write type on the 2025.2 page, but `type=SR` with `csr`, `description`, `remarks` created SR-000073..76 on PCR360 test (2026-11-02). Numbers look like `SR-0000NN`.
-- We also send `sdc` once `DESIGN_SDC`/`DEFAULT_SDC` are set in `app/services/ringcentral_request.py` (design departments vs everyone else). SDCs for SRs have `SDC.SD_TYPE = 'sd-service-request'`.
-- How an SDC shows up: an inquiry created with `sdc` (IQ00000028 on test) got the SDC's steps copied into `SERVICE_DESK_WORKFLOW` (`SOURCE_TABLE_NAME = 'SDC_WORKFLOW'`, `WORKGROUPS_RECID` set, `WORKER_CONTACTS_RECID` null, no action). Whether an SR does the same is (unverified) until the first SR with `sdc` on test. Check with:
+- **PCR360 ignores `sdc` on an SR**: SR-000096 was created with `sdc` and got no workflow and no action (test, 2026-11-19). An inquiry created with `sdc` (IQ00000028) does get the SDC's steps in `SERVICE_DESK_WORKFLOW` (`SOURCE_TABLE_NAME = 'SDC_WORKFLOW'`, workgroup set, worker null, no action).
+- So for the RingCentral form we copy the SDC's steps ourselves: `sdc_workflow_steps(sdc)` reads `SDC_WORKFLOW` (SEQUENCE, WORKGROUPS_RECID, WORKER_CONTACTS_RECID) with `sql.json`, then `add_workflow_step` posts one `WORKFLOW` per step. The SDC is `DESIGN_SDC`/`DEFAULT_SDC` in `app/services/ringcentral_request.py`. SDCs for SRs have `SDC.SD_TYPE = 'sd-service-request'`.
+- `WORKFLOW` write: `{"type": "WORKFLOW", "sd_number": "SR-000096", "sequence": 100, "workgroup": 9, "billable": 0, "status": "PENDING"}` (+ `worker` if any) returned `{"status": "success", "servicedesk": 99}` (99 = the new SERVICE_DESK_WORKFLOW RECID). The wiki lists `sda_recid`/`sda_number` as required; it is not needed for a record-level step. Unlike an SDC-made step, `SOURCE_TABLE_NAME` is null. Check a record's steps with:
   `SELECT W.SEQUENCE, W.WORKGROUPS_RECID, W.WORKER_CONTACTS_RECID, W.SERVICE_DESK_ACTIONS_RECID FROM SERVICE_DESK_WORKFLOW W JOIN SERVICE_DESK S ON S.RECID = W.SERVICE_DESK_RECID WHERE S.SD_NUMBER = 'SR-0000NN'`
 
 ### IQ (Inquiry) - used by `create_inquiry` / `test_create_inquiry`
