@@ -161,6 +161,66 @@ def _int_or_none(value) -> int | None:
     return int(value) if value not in (None, "") else None
 
 
+def _sql(host: str, api_key: str | None, sql: str, limit: int, page: int = 1) -> dict:
+    """One page of a read-only query. Raises PCR360Error on any failure."""
+
+    payload = {"sql": sql, "limit": limit}
+    if page != 1:
+        payload["page"] = page
+
+    response = _post(_sql_url(host, api_key), payload)
+
+    logger.info("PCR360 SQL page %s status %s: %s", page, response.status_code, _short(response, 120))
+
+    _raise_for_status(response)
+    result = response.json()
+
+    if result.get("status") != "success":
+        raise PCR360Error(f"PCR360 query failed: {result.get('message')}")
+
+    return result
+
+
+SQL_PAGE_SIZE = 5000
+
+
+def _sql_all(host: str, api_key: str | None, sql: str) -> list[dict]:
+    """Every row of a read-only query, page by page."""
+
+    rows: list[dict] = []
+    page = 1
+
+    while True:
+        result = _sql(host, api_key, sql, SQL_PAGE_SIZE, page)
+        batch = result.get("results") or []
+        rows += batch
+
+        if len(batch) < SQL_PAGE_SIZE or len(rows) >= int(result.get("total_count") or 0):
+            return rows
+
+        page += 1
+
+
+PHONE_NUMBERS_SQL = (
+    "SELECT S.SERVICE_ID, L.CODE AS STATUS FROM SERVICES S "
+    "JOIN PHONE_SERVICES P ON P.SERVICES_RECID = S.RECID "
+    "JOIN LISTS L ON L.RECID = S.SERVICE_STATUS_LISTS_RECID"
+)
+
+
+def prod_phone_numbers() -> list[dict]:
+    """
+    Every phone service in PCR360 **production** with its status code:
+    [{"SERVICE_ID": "8659740485", "STATUS": "AVAILABLE"}, ...]. Statuses
+    seen on test: AVAILABLE, ACTIVE, INACTIVE, ORDER_PENDING.
+
+    Read-only (sql.json); the production key needs SQL read.
+    """
+
+    s = get_settings()
+    return _sql_all(s.pcr_prod_host, s.pcr_prod_api_key, PHONE_NUMBERS_SQL)
+
+
 def sdc_workflow_steps(sdc: int) -> list[dict]:
     """
     The workflow steps defined on an SDC in PCR360 **test**, in order:
@@ -170,18 +230,10 @@ def sdc_workflow_steps(sdc: int) -> list[dict]:
     PCR360Error if the query fails.
     """
 
-    payload = {"sql": SDC_STEPS_SQL.format(sdc=int(sdc)), "limit": 100}
     s = get_settings()
+    result = _sql(s.pcr_test_host, s.pcr_test_api_key, SDC_STEPS_SQL.format(sdc=int(sdc)), 100)
 
-    response = _post(_sql_url(s.pcr_test_host, s.pcr_test_api_key), payload)
-
-    logger.info("PCR360 SDC %s workflow status %s: %s", sdc, response.status_code, _short(response))
-
-    _raise_for_status(response)
-    result = response.json()
-
-    if result.get("status") != "success":
-        raise PCR360Error(f"PCR360 SDC {sdc} workflow query failed: {result.get('message')}")
+    logger.info("PCR360 SDC %s workflow: %d steps", sdc, len(result.get("results") or []))
 
     return [
         {

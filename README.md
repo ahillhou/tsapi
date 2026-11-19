@@ -64,6 +64,22 @@ Invoke-WebRequest "http://<server>:8000/reports/ringcentral/unused-licenses?days
   -Headers @{ "X-Webhook-Secret" = "<REPORTS_SECRET>" } -OutFile unused.csv
 ```
 
+### Phone number audit
+
+`GET /reports/number-audit` downloads a CSV comparing PCR360 **production**
+phone services (read with `sql.json`; the production key needs SQL read)
+with RingCentral's company numbers. Each row has a **Problem**:
+
+- RingCentral unassigned, not in PCR360
+- PCR360 Available, RingCentral assigned
+- PCR360 Active, RingCentral unassigned
+- PCR360 Available, RingCentral unassigned (free in both)
+
+"Assigned" = the RingCentral number is on an extension. Numbers are matched
+on their last 10 digits. Read-only on both systems; takes 1-3 minutes
+because RingCentral rate-limits its number list. Same reports secret and
+Swagger Authorize steps as above.
+
 ## Parking event messages
 
 Parking & Transportation can switch a temporary message (football games,
