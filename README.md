@@ -66,14 +66,16 @@ Invoke-WebRequest "http://<server>:8000/reports/ringcentral/unused-licenses?days
 
 ### Phone number audit
 
-`GET /reports/number-audit` downloads a CSV comparing PCR360 **production**
-phone services (read with `sql.json`; the production key needs SQL read)
-with RingCentral's company numbers. Each row has a **Problem**:
+`GET /reports/number-audit` downloads a CSV with every phone number found in
+PCR360 **production** (phone services, read with `sql.json`; the production
+key needs SQL read) or RingCentral, one row each. The **Comparison** column
+says where it is in each system, e.g. "PCR360 Available, RingCentral
+assigned", "PCR360 Active, not in RingCentral", "Not in PCR360, RingCentral
+unassigned". Numbers that agree ("PCR360 Active, RingCentral assigned") are
+left out unless `include_matches=true`.
 
-- RingCentral unassigned, not in PCR360
-- PCR360 Available, RingCentral assigned
-- PCR360 Active, RingCentral unassigned
-- PCR360 Available, RingCentral unassigned (free in both)
+`GET /reports/number-audit/summary` returns just the count per comparison
+(JSON), shown on the Swagger page.
 
 "Assigned" = the RingCentral number is on an extension. Numbers are matched
 on their last 10 digits. Read-only on both systems; takes 1-3 minutes

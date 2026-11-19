@@ -10,14 +10,7 @@ from app.clients.ringcentral import auth as rc_auth
 from app.clients.ringcentral import phone_numbers
 from app.clients.ringcentral.errors import RingCentralError
 from app.services import number_audit
-from app.services.number_audit import (
-    BOTH_FREE,
-    PCR_ACTIVE_RC_UNASSIGNED,
-    PCR_AVAILABLE_RC_ASSIGNED,
-    RC_UNASSIGNED_NOT_IN_PCR,
-    build_audit,
-    ten_digits,
-)
+from app.services.number_audit import build_audit, summarize, ten_digits
 
 PATH = "/reports/number-audit"
 SECRET = {"X-Webhook-Secret": "report-secret"}
@@ -46,54 +39,95 @@ def test_ten_digits(value, expected):
     assert ten_digits(value) == expected
 
 
-def test_each_problem_and_what_is_left_out():
+def _view(rows):
+    return [(r["Comparison"], r["Number"]) for r in rows]
+
+
+def test_every_number_in_either_system_is_classified():
     pcr = [
-        _pcr("8650000002", "AVAILABLE"),  # RC assigned -> problem
-        _pcr("8650000003", "ACTIVE"),  # RC unassigned -> problem
-        _pcr("8650000004", "AVAILABLE"),  # RC unassigned -> free in both
-        _pcr("8650000005", "ACTIVE"),  # RC assigned -> fine, not listed
-        _pcr("8650000006", "INACTIVE"),  # RC unassigned -> not asked for
-        _pcr("8650000099", "AVAILABLE"),  # not in RC at all -> not listed
+        _pcr("8650000002", "AVAILABLE"),
+        _pcr("8650000003", "ACTIVE"),
+        _pcr("8650000004", "AVAILABLE"),
+        _pcr("8650000005", "ACTIVE"),
+        _pcr("8650000006", "INACTIVE"),
+        _pcr("8650000010", "ACTIVE"),  # not in RingCentral
+        _pcr("8650000011", "AVAILABLE"),  # not in RingCentral
+        _pcr("8650000012", "ORDER_PENDING"),
+        _pcr("40716", "ACTIVE"),  # too short to match a phone number: skipped
     ]
     rc = [
-        _rc("+18650000001", "CompanyNumber"),  # not in PCR, unassigned -> problem
+        _rc("+18650000001", "CompanyNumber"),
         _rc("+18650000002", ext="41000"),
         _rc("+18650000003", "CompanyNumber", status="PortedIn"),
         _rc("+18650000004", "CompanyNumber"),
         _rc("+18650000005", ext="41001"),
         _rc("+18650000006", "CompanyNumber"),
-        _rc("+18650000007", "IntegrationNumber", ext="41002"),  # assigned, not in PCR -> fine
+        _rc("+18650000007", "IntegrationNumber", ext="41002"),
+        _rc("+18650000012", ext="41003"),
     ]
 
     rows = build_audit(pcr, rc)
 
-    assert rows == [
-        {"Problem": RC_UNASSIGNED_NOT_IN_PCR, "Number": "865-000-0001", "PCR360 Status": "",
-         "RingCentral Type": "CompanyNumber", "RingCentral Status": "Normal", "RingCentral Extension": ""},
-        {"Problem": PCR_AVAILABLE_RC_ASSIGNED, "Number": "865-000-0002", "PCR360 Status": "AVAILABLE",
-         "RingCentral Type": "DirectNumber", "RingCentral Status": "Normal", "RingCentral Extension": "41000"},
-        {"Problem": PCR_ACTIVE_RC_UNASSIGNED, "Number": "865-000-0003", "PCR360 Status": "ACTIVE",
-         "RingCentral Type": "CompanyNumber", "RingCentral Status": "PortedIn", "RingCentral Extension": ""},
-        {"Problem": BOTH_FREE, "Number": "865-000-0004", "PCR360 Status": "AVAILABLE",
-         "RingCentral Type": "CompanyNumber", "RingCentral Status": "Normal", "RingCentral Extension": ""},
+    assert _view(rows) == [
+        ("Not in PCR360, RingCentral unassigned", "865-000-0001"),
+        ("Not in PCR360, RingCentral assigned", "865-000-0007"),
+        ("PCR360 Active, not in RingCentral", "865-000-0010"),
+        ("PCR360 Available, not in RingCentral", "865-000-0011"),
+        ("PCR360 Available, RingCentral assigned", "865-000-0002"),
+        ("PCR360 Active, RingCentral unassigned", "865-000-0003"),
+        ("PCR360 Order Pending, RingCentral assigned", "865-000-0012"),
+        ("PCR360 Inactive, RingCentral unassigned", "865-000-0006"),
+        ("PCR360 Available, RingCentral unassigned", "865-000-0004"),
+        ("PCR360 Active, RingCentral assigned", "865-000-0005"),
     ]
 
+    by_number = {r["Number"]: r for r in rows}
+    assert {k: v for k, v in by_number["865-000-0002"].items() if k != "_key"} == {
+        "Comparison": "PCR360 Available, RingCentral assigned",
+        "Number": "865-000-0002",
+        "PCR360 Status": "AVAILABLE",
+        "RingCentral Type": "DirectNumber",
+        "RingCentral Status": "Normal",
+        "RingCentral Extension": "41000",
+    }
+    assert {k: v for k, v in by_number["865-000-0010"].items() if k != "_key"} == {
+        "Comparison": "PCR360 Active, not in RingCentral",
+        "Number": "865-000-0010",
+        "PCR360 Status": "ACTIVE",
+        "RingCentral Type": "",
+        "RingCentral Status": "",
+        "RingCentral Extension": "",
+    }
 
-def test_rows_sorted_by_problem_then_number():
+
+def test_summary_counts_in_listing_order():
+    rows = build_audit(
+        [_pcr("8650000001", "ACTIVE"), _pcr("8650000002", "ACTIVE"), _pcr("8650000003", "AVAILABLE")],
+        [_rc("+18650000001", ext="1"), _rc("+18650000002", ext="2")],
+    )
+
+    assert summarize(rows) == {
+        "PCR360 Available, not in RingCentral": 1,
+        "PCR360 Active, RingCentral assigned": 2,
+    }
+
+
+def test_rows_sorted_by_comparison_then_number():
     rc = [_rc("+18650000009", "CompanyNumber"), _rc("+18650000002", ext="1"), _rc("+18650000001", "CompanyNumber")]
     pcr = [_pcr("8650000002", "AVAILABLE")]
 
-    assert [(r["Problem"], r["Number"]) for r in build_audit(pcr, rc)] == [
-        (RC_UNASSIGNED_NOT_IN_PCR, "865-000-0001"),
-        (RC_UNASSIGNED_NOT_IN_PCR, "865-000-0009"),
-        (PCR_AVAILABLE_RC_ASSIGNED, "865-000-0002"),
+    assert _view(build_audit(pcr, rc)) == [
+        ("Not in PCR360, RingCentral unassigned", "865-000-0001"),
+        ("Not in PCR360, RingCentral unassigned", "865-000-0009"),
+        ("PCR360 Available, RingCentral assigned", "865-000-0002"),
     ]
 
 
-def test_duplicate_pcr_number_uses_the_most_in_use_status():
+def test_duplicate_numbers_are_listed_once():
     pcr = [_pcr("865-000-0002", "AVAILABLE"), _pcr("8650000002", "ACTIVE")]
+    rc = [_rc("+18650000002", ext="41000"), _rc("+1 865 000 0002", ext="41000")]
 
-    assert build_audit(pcr, [_rc("+18650000002", ext="41000")]) == []
+    assert _view(build_audit(pcr, rc)) == [("PCR360 Active, RingCentral assigned", "865-000-0002")]
 
 
 # ---- PCR360 production reader -----------------------------------------------
@@ -203,39 +237,70 @@ def numbers(monkeypatch):
     return platform
 
 
-def test_route_returns_csv_and_reads_only_production_pcr(report_client, http, numbers):
-    http.sql_results = [_pcr("8650000002", "AVAILABLE")]
+def test_route_returns_csv_without_matches_by_default(report_client, http, numbers):
+    http.sql_results = [_pcr("8650000002", "AVAILABLE"), _pcr("8650000003", "ACTIVE")]
+    numbers.pages[0].append(_rc("+18650000003", ext="41001"))  # a match
 
     response = report_client.get(PATH, headers=SECRET)
 
     assert response.status_code == 200
     lines = response.body.decode().split("\r\n")
-    assert lines[0] == "Problem,Number,PCR360 Status,RingCentral Type,RingCentral Status,RingCentral Extension"
-    assert lines[1] == "\"RingCentral unassigned, not in PCR360\",865-000-0001,,CompanyNumber,Normal,"
-    assert lines[2] == "\"PCR360 Available, RingCentral assigned\",865-000-0002,AVAILABLE,DirectNumber,Normal,41000"
+    assert lines[0] == "Comparison,Number,PCR360 Status,RingCentral Type,RingCentral Status,RingCentral Extension"
+    assert lines[1:] == [
+        "\"Not in PCR360, RingCentral unassigned\",865-000-0001,,CompanyNumber,Normal,",
+        "\"PCR360 Available, RingCentral assigned\",865-000-0002,AVAILABLE,DirectNumber,Normal,41000",
+        "",
+    ]
     assert [c["url"] for c in http.calls] == [PCR_PROD_SQL_URL]
 
 
-def test_route_needs_the_reports_secret(report_client, http, numbers):
-    assert report_client.get(PATH).status_code == 401
+def test_route_can_include_matches(report_client, http, numbers):
+    http.sql_results = [_pcr("8650000002", "ACTIVE")]
+
+    response = report_client.get(PATH, headers=SECRET, query="include_matches=true")
+
+    assert "\"PCR360 Active, RingCentral assigned\",865-000-0002" in response.body.decode()
+
+
+def test_summary_route(report_client, http, numbers):
+    http.sql_results = [_pcr("8650000002", "ACTIVE"), _pcr("8650000009", "AVAILABLE")]
+
+    response = report_client.get(PATH + "/summary", headers=SECRET)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "pcr360_phone_services": 2,
+        "ringcentral_numbers": 2,
+        "counts": {
+            "Not in PCR360, RingCentral unassigned": 1,
+            "PCR360 Available, not in RingCentral": 1,
+            "PCR360 Active, RingCentral assigned": 1,
+        },
+    }
+
+
+@pytest.mark.parametrize("path", [PATH, PATH + "/summary"])
+def test_routes_need_the_reports_secret(report_client, http, numbers, path):
+    assert report_client.get(path).status_code == 401
     assert http.calls == [] and numbers.calls == []
 
 
-def test_route_pcr_failure_is_502(report_client, http, numbers):
+@pytest.mark.parametrize("path", [PATH, PATH + "/summary"])
+def test_pcr_failure_is_502(report_client, http, numbers, path):
     http.sql_status = 400
     http.sql_response = {"status": "failure", "message": "SQL is not valid"}
 
-    response = report_client.get(PATH, headers=SECRET)
+    response = report_client.get(path, headers=SECRET)
 
     assert response.status_code == 502
     assert "KEY-PROD" not in response.body.decode()
 
 
-def test_number_audit_logs_counts(http, numbers, caplog):
+def test_run_audit_logs_counts(http, numbers, caplog):
     http.sql_results = []
 
     with caplog.at_level("INFO", logger="app.services.number_audit"):
-        rows = number_audit.number_audit()
+        audit = number_audit.run_audit()
 
-    assert [r["Problem"] for r in rows] == [RC_UNASSIGNED_NOT_IN_PCR]
+    assert audit["ringcentral_numbers"] == 2
     assert "Number audit: 0 PCR360 phone services, 2 RingCentral numbers" in caplog.text

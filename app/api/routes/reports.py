@@ -64,6 +64,14 @@ async def unused_licenses(
     )
 
 
+async def _run_number_audit() -> dict:
+    try:
+        return await run_in_threadpool(number_audit.run_audit)
+    except (RingCentralError, PCR360Error) as exc:
+        logger.error("Number audit failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+
+
 @router.get(
     "/number-audit",
     summary="Phone number audit: PCR360 vs RingCentral (CSV)",
@@ -74,29 +82,35 @@ async def unused_licenses(
         502: {"description": "PCR360 or RingCentral refused or failed"},
     },
 )
-async def phone_number_audit():
+async def phone_number_audit(
+    include_matches: bool = Query(
+        False,
+        description="Also list numbers that agree (PCR360 Active, RingCentral assigned).",
+    ),
+):
     """
-    Compares PCR360 **production** phone numbers with RingCentral's. Each row
-    is labelled in the **Problem** column:
+    Every phone number in PCR360 **production** or RingCentral, one row
+    each. The **Comparison** column says where the number is in each system:
 
-    - **RingCentral unassigned, not in PCR360**
-    - **PCR360 Available, RingCentral assigned**
-    - **PCR360 Active, RingCentral unassigned**
-    - **PCR360 Available, RingCentral unassigned** (free in both)
+    - PCR360 side: *Not in PCR360*, *Available*, *Active*, *Order Pending*, *Inactive*
+    - RingCentral side: *not in RingCentral*, *assigned* (on an extension), *unassigned*
 
-    "Assigned" means the RingCentral number is on an extension. Filter on
-    **RingCentral Type** to leave out e.g. ContactCenterNumber. Read-only on
-    both systems. Takes 1-3 minutes (RingCentral rate-limits the number list).
+    e.g. "PCR360 Available, RingCentral assigned" or "PCR360 Active, not in
+    RingCentral". Numbers that agree (Active and assigned) are left out unless
+    **include_matches** is true. Filter on **RingCentral Type** to drop e.g.
+    ContactCenterNumber. Read-only on both systems; takes 1-3 minutes.
 
     On this page: click **Authorize**, paste the reports secret, then
-    **Try it out** > **Execute** > **Download file**.
+    **Try it out** > **Execute** > **Download file**. For just the counts,
+    use **/reports/number-audit/summary**.
     """
 
-    try:
-        rows = await run_in_threadpool(number_audit.number_audit)
-    except (RingCentralError, PCR360Error) as exc:
-        logger.error("Number audit failed: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc)) from None
+    audit = await _run_number_audit()
+    rows = [
+        {c: row[c] for c in number_audit.COLUMNS}
+        for row in audit["rows"]
+        if include_matches or not number_audit.is_match(row)
+    ]
 
     body = ringcentral_reports.to_csv(rows, number_audit.COLUMNS)
     filename = f"number-audit-{date.today().isoformat()}.csv"
@@ -106,3 +120,26 @@ async def phone_number_audit():
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get(
+    "/number-audit/summary",
+    summary="Phone number audit: counts only (JSON)",
+    responses={
+        401: {"description": "Missing or wrong secret (use Authorize)"},
+        502: {"description": "PCR360 or RingCentral refused or failed"},
+    },
+)
+async def phone_number_audit_summary():
+    """
+    How many numbers fall in each comparison (see /reports/number-audit),
+    matches included, shown right on this page. Takes 1-3 minutes.
+    """
+
+    audit = await _run_number_audit()
+
+    return {
+        "pcr360_phone_services": audit["pcr360_phone_services"],
+        "ringcentral_numbers": audit["ringcentral_numbers"],
+        "counts": number_audit.summarize(audit["rows"]),
+    }
