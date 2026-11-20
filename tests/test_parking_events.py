@@ -149,7 +149,7 @@ def test_on_turns_others_off_first_then_target_on_and_replies(staff_client, queu
         (
             "POST",
             "/restapi/v1.0/account/~/extension/~/sms",
-            {"from": {"phoneNumber": "+18659740716"}, "to": [{"phoneNumber": STAFF}], "text": reply},
+            {"from": {"phoneNumber": "+18659741100"}, "to": [{"phoneNumber": STAFF}], "text": reply},
         ),
     ]
 

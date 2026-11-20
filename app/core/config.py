@@ -90,9 +90,11 @@ def get_settings() -> Settings:
         rc_client_id=os.getenv("RC_CLIENT_ID"),
         rc_client_secret=os.getenv("RC_CLIENT_SECRET"),
         rc_jwt_token=os.getenv("RC_JWT_TOKEN"),
-        # Replies must come from the number nurses text to trigger the
-        # workflow; the JWT user must have it as an SMS-enabled number.
-        rc_sms_from_number=os.getenv("RC_SMS_FROM_NUMBER") or "+18659740716",
+        # Replies must come from the number staff text to trigger the
+        # workflows: ext 41100 "OIT Design SMS Custom Rule Controller"
+        # (SMS-enabled direct number). The JWT in RC_JWT_TOKEN must be that
+        # user's, since /extension/~/sms sends as the JWT's user.
+        rc_sms_from_number=os.getenv("RC_SMS_FROM_NUMBER") or "+18659741100",
         # Staff phone numbers stay in app/.env, never in git (public repo).
         parking_event_senders=_env_list("PARKING_EVENT_SENDERS"),
         tdx_webhook_secret=os.getenv("TDX_WEBHOOK_SECRET") or None,

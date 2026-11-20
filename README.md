@@ -136,8 +136,10 @@ and are passed with `docker run --env-file app/.env`:
 Optional: `TDX_WEBHOOK_SECRET`, `RINGCENTRAL_WEBHOOK_SECRET`,
 `REPORTS_SECRET` (enables `/reports/...`),
 `ENABLE_DEBUG_ROUTES` (default off), `LOG_LEVEL` (default `INFO`),
-`RC_SMS_FROM_NUMBER` (nurse SMS reply sender, default `+18659740716`, the
-number nurses text; must be an SMS number of the RingCentral JWT user),
+`RC_SMS_FROM_NUMBER` (SMS reply sender for the nurse and Parking texts,
+default `+18659741100`, ext 41100, the number the workflows listen on; must
+be an SMS number of the RingCentral JWT user, so `RC_JWT_TOKEN` must be
+ext 41100's JWT),
 `PARKING_EVENT_SENDERS` (comma-separated phone numbers allowed to switch
 Parking event messages; empty = nobody).
 
