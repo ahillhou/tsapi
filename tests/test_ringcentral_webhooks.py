@@ -131,3 +131,64 @@ def test_ringcentral_dayoff_is_not_implemented(client, rc):
 
     assert response.status_code == 501
     assert rc.calls == []
+
+
+# ---- plain DAYOFF/BACK acts on the sender's own extension ----------------
+
+LOOKUP = "/restapi/v2/accounts/~/phone-numbers?phoneNumber=%2B15555550100"
+
+
+def test_plain_dayoff_targets_the_sender_not_the_workflow_extension(client, rc):
+    # The workflow now runs on ext 41100, so extensionId is always that one.
+    body = {"command": "DAYOFF", "extensionId": "1619021040", "sender": "+15555550100"}
+
+    response = client.post("/demo/dayoff", json_body=body)
+
+    assert response.json()["message"] == "Call rule enabled for Nurse 101."
+    gets = [path for method, path, *_ in rc.calls if method == "GET"]
+    assert gets[0] == LOOKUP
+    assert "/restapi/v1.0/account/~/extension/101" in gets
+    assert not [p for p in gets if "1619021040" in p]
+    assert _patches(rc) == [(RULE_PATH.format("101"), True)]
+
+
+@pytest.mark.parametrize("sender", ["(555) 555-0100", "5555550100", "1-555-555-0100"])
+def test_sender_number_formats_are_normalised(client, rc, sender):
+    client.post("/demo/dayoff", json_body={**DAYOFF, "command": "BACK", "sender": sender})
+
+    assert [path for method, path, *_ in rc.calls if method == "GET"][0] == LOOKUP
+    assert _patches(rc) == [(RULE_PATH.format("101"), False)]
+
+
+def test_phone_not_on_an_extension_gets_told_to_add_the_extension(client, rc):
+    response = client.post("/demo/dayoff", json_body={**DAYOFF, "sender": "+15555559999"})
+
+    assert response.json()["message"] == (
+        "DAYOFF needs your extension: this phone isn't on a RingCentral extension. "
+        "Text DAYOFF followed by your extension number."
+    )
+    assert _patches(rc) == []
+    assert rc.sms_sent()[0]["to"] == [{"phoneNumber": "+15555559999"}]
+
+
+def test_naming_an_extension_skips_the_sender_lookup(client, rc):
+    client.post("/demo/dayoff", json_body={**DAYOFF, "command": "dayoff 1234"})
+
+    assert not [p for m, p, *_ in rc.calls if m == "GET" and "phone-numbers" in p]
+    assert _patches(rc) == [(RULE_PATH.format("555"), True)]
+
+
+@pytest.mark.parametrize(
+    "number, expected",
+    [
+        ("+18659741100", "+18659741100"),
+        ("8659741100", "+18659741100"),
+        ("1 (865) 974-1100", "+18659741100"),
+        ("41100", None),
+        ("", None),
+    ],
+)
+def test_to_e164(number, expected):
+    from app.clients.ringcentral.extensions import to_e164
+
+    assert to_e164(number) == expected

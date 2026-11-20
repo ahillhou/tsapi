@@ -99,6 +99,14 @@ Fallback options: cache the number->id map at startup/TTL, or use the company di
 search (`POST /restapi/v1.0/account/~/directory/contacts/search`, scope ReadAccounts /
 directory permission, unverified).
 
+Finding by **phone number** (used for nurse DAYOFF/BACK, `get_extension_by_phone_number`):
+`GET /restapi/v2/accounts/~/phone-numbers?phoneNumber=%2B18659741100` returns 0 or 1
+records; `extension` = `{id, extensionNumber}` when the number is on one. Confirmed on
+the live account 2026-11-20. The `+` must be sent as `%2B`: passing `phoneNumber` as an
+SDK query param leaves it bare and RingCentral answers HTTP 400 CMN-101. Rate group
+Heavy, ReadAccounts. Confirmed: `?extensionNumber=` on the v1 list works (`find_ext`
+scripts used it).
+
 Source: https://developers.ringcentral.com/guide/account ,
 https://developers.ringcentral.com/api-reference/Extensions/listExtensions (not loadable)
 

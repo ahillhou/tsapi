@@ -4,6 +4,10 @@ Student Health nurse "day off" via SMS.
 A RingCentral workflow forwards a text like "DAYOFF" or "BACK" (optionally
 followed by an extension number, for managers). We turn the nurse's
 "Nurses Out of Office Custom Rule" on or off and text back the result.
+
+A plain DAYOFF/BACK acts on the extension that owns the number the text
+came from. (The workflow's own extension, sent as extensionId, is the
+number everyone texts, ext 41100, so it says nothing about the sender.)
 """
 
 import logging
@@ -12,6 +16,7 @@ from app.clients.ringcentral.auth import get_platform
 from app.clients.ringcentral.extensions import (
     get_extension,
     get_extension_by_number,
+    get_extension_by_phone_number,
 )
 from app.clients.ringcentral.interaction_rules import (
     find_dayoff_rule,
@@ -43,7 +48,9 @@ class NurseDayOffService:
     def __init__(self, platform):
         self.platform = platform
 
-    def handle(self, sender_extension: dict, message: str) -> str:
+    def handle(self, sender: str, message: str) -> str:
+        """`sender` is the phone number the text came from."""
+
         parsed = parse_command(message)
 
         if not parsed:
@@ -57,8 +64,17 @@ class NurseDayOffService:
         target_extension_number = parsed["target_extension"]
 
         if not target_extension_number:
-            # Nurse texting about themselves
-            extension = get_extension(self.platform, sender_extension["id"])
+            # Nurse texting about themselves: the extension that owns the
+            # number they texted from.
+            owner = get_extension_by_phone_number(self.platform, sender)
+
+            if not owner:
+                return (
+                    f"{command} needs your extension: this phone isn't on a RingCentral "
+                    f"extension. Text {command} followed by your extension number."
+                )
+
+            extension = get_extension(self.platform, owner["id"])
         else:
             # Manager texting about someone else's extension number
             extension = get_extension_by_number(self.platform, target_extension_number)
@@ -82,13 +98,18 @@ class NurseDayOffService:
 
 
 def handle_sms_command(extension_id: str, command: str, sender: str) -> str:
-    """Apply the command, then text the result back to the sender."""
+    """
+    Apply the command, then text the result back to the sender.
+
+    `extension_id` is the workflow's own extension (ext 41100); it is only
+    logged, never acted on.
+    """
 
     platform = get_platform()
 
-    result = NurseDayOffService(platform).handle({"id": extension_id}, command)
+    result = NurseDayOffService(platform).handle(sender, command)
 
-    logger.info("Day-off result for extension %s: %s", extension_id, result)
+    logger.info("Day-off %r from %s (workflow ext %s): %s", command, sender, extension_id, result)
 
     send_reply(platform, sender, result)
 

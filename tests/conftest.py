@@ -10,6 +10,7 @@ import asyncio
 import copy
 import json
 import os
+from urllib.parse import unquote
 
 # Set before the app is imported. Values already in the environment win
 # over app/.env, so real local secrets are never used by tests.
@@ -190,14 +191,18 @@ class FakePlatform:
     """
     Directory: extension 101 is "Nurse 101" (ID 101); extension number 1234
     is "Target Nurse" (ID 555). Every extension has the day-off rule unless
-    its ID is in `no_rule_for`.
+    its ID is in `no_rule_for`. Phone +15555550100 belongs to extension ID
+    101 (see `phone_owners`); any other number is on no extension.
     """
+
+    PHONE_LOOKUP = "/restapi/v2/accounts/~/phone-numbers?phoneNumber="
 
     RULE = {"id": "r9", "displayName": "Nurses Out of Office Custom Rule", "enabled": False}
 
     def __init__(self):
         self.calls = []
         self.no_rule_for = set()
+        self.phone_owners = {"+15555550100": {"id": "101", "extensionNumber": "101"}}
 
     def logged_in(self):
         return True
@@ -207,6 +212,12 @@ class FakePlatform:
 
     def get(self, path, params=None):
         self.calls.append(("GET", path, params))
+
+        if path.startswith(self.PHONE_LOOKUP):
+            number = unquote(path[len(self.PHONE_LOOKUP):])
+            owner = self.phone_owners.get(number)
+            records = [{"phoneNumber": number, "extension": owner}] if owner else []
+            return FakeRCResponse({"records": records})
 
         if path.endswith("/interaction-rules"):
             ext_id = path.split("/extensions/")[1].split("/")[0]
