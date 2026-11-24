@@ -28,6 +28,7 @@ TEST_ENV = {
     "TDX_WEBHOOK_SECRET": "",
     "RINGCENTRAL_WEBHOOK_SECRET": "",
     "REPORTS_SECRET": "",
+    "ACCESS_REQUEST_AUTOCLOSE": "",
     "ENABLE_DEBUG_ROUTES": "",
     "LOG_LEVEL": "WARNING",
 }
@@ -97,7 +98,7 @@ class FakeResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise requests.HTTPError(f"HTTP {self.status_code}")
+            raise requests.HTTPError(f"HTTP {self.status_code}", response=self)
 
 
 class FakeHTTP:
@@ -115,6 +116,8 @@ class FakeHTTP:
         self.sql_status = 200
         self.sql_response = None  # overrides the body below when set
         self.sql_results = [{"SEQUENCE": "100", "WORKGROUPS_RECID": "6", "WORKER_CONTACTS_RECID": None}]
+        # Production TDX tickets by ID (GET /api/tickets/{id}); others 404.
+        self.prod_tickets = {}
 
     def _record(self, method, url, headers, kwargs, **extra):
         self.calls.append(
@@ -161,6 +164,10 @@ class FakeHTTP:
 
         if url.startswith(f"{TDX_BASE}/api/tickets/"):
             return FakeResponse(json_data=copy.deepcopy(SAMPLE_TICKET))
+
+        if url.startswith(f"{TDX_PROD_BASE}/api/tickets/"):
+            found = self.prod_tickets.get(int(url.rsplit("/", 1)[1]))
+            return FakeResponse(json_data=copy.deepcopy(found)) if found else FakeResponse(404, {})
 
         if "/attachments/" in url:
             file_id = url.rsplit("/", 2)[-2]

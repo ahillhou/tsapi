@@ -85,6 +85,29 @@ on their last 10 digits. Read-only on both systems; takes 1-3 minutes
 because RingCentral rate-limits its number list. Same reports secret and
 Swagger Authorize steps as above.
 
+## Closing finished PCR access requests
+
+Staff finish a PCR access request (the `/tdx/webhook/access_request` inquiry
+in PCR360 production) by ticking **Complete** and setting it to **VOID**.
+`POST /jobs/access-requests/close` finds those (voided in the last `days`
+days, default 14) and sets each one's **production** TDX ticket (app 2278)
+to **Resolved** with a private comment, "Completed in PCR360 (IQ...)", and
+no email notifications from us (TDX's own app rules may still send some).
+
+- Tickets already closed (Resolved, Cancelled...) are never touched, so it
+  is safe to run again and again. Voided without Complete = left alone.
+- `dry_run` is on by default and only reports what would happen; `only`
+  limits a run to one inquiry (e.g. `IQ00000141`). Same reports secret and
+  Swagger Authorize steps as the reports.
+- PCR360 is only read (sql.json); the production key needs SQL read.
+- TDX allows 60 API calls a minute, so it pauses about a second per call
+  and waits out a rate limit (429). Tickets seen closed aren't read again
+  until the app restarts, so a 60-day run takes ~3 minutes the first time.
+
+To run it on its own every 15 minutes, set `ACCESS_REQUEST_AUTOCLOSE` in
+`app/.env` to `dry_run` (log only; check `docker logs` for "Dry run: would
+resolve") and then `on`, and run `./deploy.sh`. Default `off`.
+
 ## Parking event messages
 
 Parking & Transportation can switch a temporary message (football games,
@@ -141,7 +164,11 @@ default `+18659741100`, ext 41100, the number the workflows listen on; must
 be an SMS number of the RingCentral JWT user, so `RC_JWT_TOKEN` must be
 ext 41100's JWT),
 `PARKING_EVENT_SENDERS` (comma-separated phone numbers allowed to switch
-Parking event messages; empty = nobody).
+Parking event messages; empty = nobody),
+`ACCESS_REQUEST_AUTOCLOSE` (`off`, `dry_run` or `on`; resolves TDX tickets of
+finished PCR access requests every 15 minutes, default `off`).
+On a Windows PC, use `TDX_USERNAME`/`TDX_PASSWORD`: Windows already sets
+`USERNAME` to your login, and it wins over `app/.env`.
 
 ## Running locally
 

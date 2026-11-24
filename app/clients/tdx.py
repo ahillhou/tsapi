@@ -130,6 +130,37 @@ def download_prod_attachment(content_uri: str) -> bytes:
     return _request("get", f"{base_url}/{content_uri}", base_url=base_url).content
 
 
+def get_prod_ticket(ticket_id: int) -> dict:
+    """Retrieve a ticket from **production** TDX."""
+
+    base_url = get_settings().tdx_prod_base_url
+
+    return _request("get", f"{base_url}/api/tickets/{ticket_id}", base_url=base_url).json()
+
+
+def update_prod_ticket_status(app_id: int, ticket_id: int, status_id: int, comment: str) -> dict:
+    """
+    Change a **production** ticket's status with a private comment and no
+    email notifications (POST /api/{appId}/tickets/{id}/feed). TDX's own
+    app rules may still notify on a status change.
+    """
+
+    base_url = get_settings().tdx_prod_base_url
+
+    return _request(
+        "post",
+        f"{base_url}/api/{app_id}/tickets/{ticket_id}/feed",
+        base_url=base_url,
+        json={
+            "NewStatusID": status_id,
+            "Comments": comment,
+            "IsPrivate": True,
+            "IsRichHtml": False,
+            "Notify": [],
+        },
+    ).json()
+
+
 def get_attribute(ticket: dict, name: str) -> str | None:
     """Return the ValueText of a ticket's custom attribute, or None."""
 

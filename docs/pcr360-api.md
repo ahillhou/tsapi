@@ -102,6 +102,8 @@ Source: https://wiki360.pcr.com/pcr360-wiki/2025.2/sql-api-endpoint
 - Useful tables: `SDC` (classifications: `RECID`, `NAME`, `SD_TYPE`), `SDC_WORKFLOW` (steps per SDC: `SDC_RECID`, `SEQUENCE`, `WORKGROUPS_RECID`), `WORKGROUPS` (`RECID`, `NAME`), `SERVICE_DESK` (`SD_NUMBER`, `SD_TYPE`, `CSR_CONTACTS_RECID`), `CONTACTS`, `USERS` / `USERS_ROLES` / `ROLES`.
 - Table/column names: see the Data Dictionary (`/pcr360-wiki/2025.2/data-dictionary`). Needs the key to carry SQL read permission (unverified how it is granted).
 - Example: `{"sql": "SELECT RECID, CODE, DESCRIPTION FROM CLASSES_OF_SERVICE"}`. This is how Classes of Service (likely what `sdc` refers to, unverified) are retrieved.
+- **UDF values** (checked on production 2026-11-24): definitions are in `USER_DEFINED_FIELDS` (`RECID`, `IDENTIFIER`, `LABEL`, `FIELD_TYPE`); values in `USER_DEFINED_FIELDS_VALS` (`UDF_RECID`, `TABLE_NAME`, `TABLE_RECID`, and one of `BOOL_VALUE` / `INTEGER_VALUE` / `VARCHAR_VALUE` / `DOUBLE_VALUE` / `DATETIME_VALUE` / `CLOB_VALUE`). For an inquiry UDF, `TABLE_NAME = 'SERVICE_DESK_INQUIRY'` and `TABLE_RECID` is the **SERVICE_DESK** RECID (not the SERVICE_DESK_INQUIRY row's). The wiki's recommended view `V_UDF` fails on production with "1267 Illegal mix of collations", even for `SELECT *`. The full table list is in the PCR360 UI: Admin > User Defined Fields > Query Builder (Tables panel).
+- Inquiries: `SERVICE_DESK_INQUIRY` (`SERVICE_DESK_RECID`, `SUBJECT`, `MESSAGE`, `DATE_RECEIVED`). Status: `SERVICE_DESK.SD_STATUS_LISTS_RECID` -> `LISTS.CODE` (`PENDING`, `VOID`, `FINALIZED`...); `SERVICE_DESK.VOID_DATE` is set when voided.
 
 ### Projects (`type=PR`)
 

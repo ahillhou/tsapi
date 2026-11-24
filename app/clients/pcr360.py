@@ -226,6 +226,37 @@ def prod_phone_numbers() -> list[dict]:
     return _sql_all(s.pcr_prod_host, s.pcr_prod_api_key, PHONE_NUMBERS_SQL)
 
 
+# PCR access requests (TDX form -> production Inquiry, subject "<change> PCR
+# Access") that staff finished: status VOID and the "Complete" checkbox
+# (UDF COMPLETE_REQUEST) ticked. UDF values live in USER_DEFINED_FIELDS_VALS,
+# keyed by TABLE_NAME 'SERVICE_DESK_INQUIRY' and the SERVICE_DESK RECID.
+# (The documented V_UDF view fails on production with a collation error.)
+# {since} is a 'YYYY-MM-DD HH:MM:SS' string the app builds itself.
+COMPLETED_ACCESS_REQUESTS_SQL = (
+    "SELECT SD.SD_NUMBER, SD.VOID_DATE, I.MESSAGE FROM SERVICE_DESK_INQUIRY I "
+    "JOIN SERVICE_DESK SD ON SD.RECID = I.SERVICE_DESK_RECID "
+    "JOIN LISTS L ON L.RECID = SD.SD_STATUS_LISTS_RECID "
+    "JOIN USER_DEFINED_FIELDS_VALS V ON V.TABLE_NAME = 'SERVICE_DESK_INQUIRY' AND V.TABLE_RECID = SD.RECID "
+    "JOIN USER_DEFINED_FIELDS U ON U.RECID = V.UDF_RECID AND U.IDENTIFIER = 'COMPLETE_REQUEST' "
+    "WHERE I.SUBJECT LIKE '%PCR Access' AND L.CODE = 'VOID' AND V.BOOL_VALUE = 1 "
+    "AND SD.VOID_DATE >= '{since}' ORDER BY SD.RECID"
+)
+
+
+def prod_completed_access_requests(since: str) -> list[dict]:
+    """
+    Access request inquiries in PCR360 **production** voided since `since`
+    with "Complete" ticked: [{"SD_NUMBER", "VOID_DATE", "MESSAGE"}, ...].
+    MESSAGE is the inquiry text, which holds "TDX Ticket ID#: <id>".
+
+    Read-only (sql.json).
+    """
+
+    s = get_settings()
+    sql = COMPLETED_ACCESS_REQUESTS_SQL.format(since=since)
+    return _sql_all(s.pcr_prod_host, s.pcr_prod_api_key, sql)
+
+
 def sdc_workflow_steps(sdc: int) -> list[dict]:
     """
     The workflow steps defined on an SDC in PCR360 **test**, in order:

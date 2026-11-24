@@ -57,12 +57,23 @@ class Settings:
     # Report downloads (app/api/routes/reports.py); closed when unset
     reports_secret: str | None
 
+    # Resolve TDX tickets of finished PCR access requests on a timer
+    # (app/services/access_request_close.py): "off", "dry_run" or "on".
+    access_request_autoclose: str
+
     # Manual testing routes in app/api/routes/debug.py
     enable_debug_routes: bool
 
 
 def _env_bool(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_choice(name: str, choices: tuple[str, ...]) -> str:
+    """First choice is the default; anything unrecognised also falls back to it."""
+
+    value = os.getenv(name, "").strip().lower()
+    return value if value in choices else choices[0]
 
 
 def _env_list(name: str) -> tuple[str, ...]:
@@ -100,5 +111,6 @@ def get_settings() -> Settings:
         tdx_webhook_secret=os.getenv("TDX_WEBHOOK_SECRET") or None,
         ringcentral_webhook_secret=os.getenv("RINGCENTRAL_WEBHOOK_SECRET") or None,
         reports_secret=os.getenv("REPORTS_SECRET") or None,
+        access_request_autoclose=_env_choice("ACCESS_REQUEST_AUTOCLOSE", ("off", "dry_run", "on")),
         enable_debug_routes=_env_bool("ENABLE_DEBUG_ROUTES"),
     )
