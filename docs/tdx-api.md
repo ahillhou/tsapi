@@ -100,8 +100,10 @@ Sources: https://utk.teamdynamix.com/sbtdwebapi/swagger/v1/openapi.json (operati
 - Production app 2278 (OIT ITSM) statuses (`GET /api/2278/tickets/statuses`, 2026-11-24): New 98854, Open 98855, In Progress 98856,
   Resolved 98857, Cancelled 98859, On Hold 98860, Awaiting Response 116350, Referred 147427, Escalated to UTC 147428, Solution Proposed 147429.
 - `Ticket.StatusClass`: 0 None, 1 New, 2 In Process, 3 Completed, 4 Cancelled, 5 On Hold, 6 Requested.
-- Whether the API account may edit tickets in app 2278 was not confirmed when this was written: the first live run shows it
-  (a 403 shows up as `update failed: HTTPError 403`).
+- The API account ("Telephone Services TDX API") can edit tickets in app 2278: confirmed 2026-11-24 (ticket 24784303).
+- `GET /api/{appId}/tickets/{id}/feed` returns the feed newest first. A status change is an entry whose `Body` contains
+  `Changed Status from "<b>Open</b>" to "<b>Resolved</b>".` (HTML). Used to spot tickets reopened after a close.
+- `GET /api/{appId}/tickets/statuses` lists the app's statuses with `StatusClass`.
 
 Source: openapi.json (`/api/{appId}/tickets/{id}/feed`, `TicketFeedEntry`, `FeedEntry`, `StatusClass`)
 

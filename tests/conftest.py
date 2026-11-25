@@ -118,6 +118,15 @@ class FakeHTTP:
         self.sql_results = [{"SEQUENCE": "100", "WORKGROUPS_RECID": "6", "WORKER_CONTACTS_RECID": None}]
         # Production TDX tickets by ID (GET /api/tickets/{id}); others 404.
         self.prod_tickets = {}
+        # Production ticket feeds by ID (GET /api/{app}/tickets/{id}/feed); default empty.
+        self.prod_feeds = {}
+        self.prod_statuses = [
+            {"ID": 98854, "Name": "New", "StatusClass": 1},
+            {"ID": 98855, "Name": "Open", "StatusClass": 2},
+            {"ID": 98857, "Name": "Resolved", "StatusClass": 3},
+            {"ID": 98859, "Name": "Cancelled", "StatusClass": 3},
+            {"ID": 147427, "Name": "Referred", "StatusClass": 3},
+        ]
 
     def _record(self, method, url, headers, kwargs, **extra):
         self.calls.append(
@@ -164,6 +173,12 @@ class FakeHTTP:
 
         if url.startswith(f"{TDX_BASE}/api/tickets/"):
             return FakeResponse(json_data=copy.deepcopy(SAMPLE_TICKET))
+
+        if url.startswith(f"{TDX_PROD_BASE}/api/") and url.endswith("/tickets/statuses"):
+            return FakeResponse(json_data=copy.deepcopy(self.prod_statuses))
+
+        if url.startswith(f"{TDX_PROD_BASE}/api/") and url.endswith("/feed"):
+            return FakeResponse(json_data=copy.deepcopy(self.prod_feeds.get(int(url.split("/")[-2]), [])))
 
         if url.startswith(f"{TDX_PROD_BASE}/api/tickets/"):
             found = self.prod_tickets.get(int(url.rsplit("/", 1)[1]))

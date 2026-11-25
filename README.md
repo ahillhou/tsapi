@@ -96,6 +96,10 @@ no email notifications from us (TDX's own app rules may still send some).
 
 - Tickets already closed (Resolved, Cancelled...) are never touched, so it
   is safe to run again and again. Voided without Complete = left alone.
+- A ticket that was ever closed before (by anyone, us included) and is open
+  again was reopened, usually by a requester's comment. It is left open for
+  a person (`reopened, left open`, and a warning in the log), since PCR360
+  doesn't show TDX comments. "Open" from Help Desk routing alone is fine.
 - `dry_run` is on by default and only reports what would happen; `only`
   limits a run to one inquiry (e.g. `IQ00000141`). Same reports secret and
   Swagger Authorize steps as the reports.

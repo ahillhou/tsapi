@@ -7,8 +7,10 @@ to VOID. This finds those inquiries in PCR360 production (read-only) and
 sets each one's production TDX ticket to Resolved with a private comment.
 
 Safe to run again and again: a ticket that is already closed (Resolved,
-Cancelled...) is never touched, so a reopened or hand-closed ticket stays
-as staff left it. PCR360 is never written to.
+Cancelled...) is never touched, and neither is one that was ever closed
+before (by anyone) and has since been reopened, e.g. by a requester's
+comment: that comment needs a person, and PCR360 doesn't show it. PCR360 is
+never written to.
 """
 
 import asyncio
@@ -48,9 +50,28 @@ sleep = time.sleep  # replaced in tests
 # read again, so the timer costs TDX calls only for new completions, and a
 # ticket staff reopen afterwards stays as they left it.
 _known_closed: set[int] = set()
+# Tickets found reopened after an earlier close; also left alone for good.
+_left_open: set[int] = set()
 _lock = threading.Lock()  # one run at a time (timer and Swagger)
 
 _TICKET_ID = re.compile(r"TDX Ticket ID#:\s*(\d+)")
+
+# A status change in a feed entry's Body, e.g.
+# 'Changed Status from "<b>Open</b>" to "<b>Resolved</b>".'
+_STATUS_CHANGE = re.compile(r'Changed Status from "[^"]*" to "([^"]*)"')
+_TAG = re.compile(r"<[^>]+>")
+
+
+def closed_before(feed: list[dict], closed_names: set[str]) -> bool:
+    """True if any feed entry changed the ticket to a closed status."""
+
+    for entry in feed or []:
+        body = _TAG.sub("", entry.get("Body") or "")
+        for name in _STATUS_CHANGE.findall(body):
+            if name.strip().lower() in closed_names:
+                return True
+
+    return False
 
 
 def ticket_id(message: str | None) -> int | None:
@@ -82,7 +103,8 @@ def close_completed(days: int = DEFAULT_DAYS, dry_run: bool = True, only: str | 
         if only:
             inquiries = [i for i in inquiries if i["SD_NUMBER"] == only.strip().upper()]
 
-        results = [_close_one(inquiry, dry_run) for inquiry in inquiries]
+        run = {}  # per-run cache: the app's closed status names
+        results = [_close_one(inquiry, dry_run, run) for inquiry in inquiries]
 
     counts: dict[str, int] = {}
     for result in results:
@@ -122,7 +144,19 @@ def _tdx(call, *args):
         sleep(RATE_LIMIT_WAIT_SECONDS)
 
 
-def _close_one(inquiry: dict, dry_run: bool) -> dict:
+def _closed_names(run: dict) -> set[str]:
+    """Names of the app's closed statuses (Completed or Cancelled class), read once per run."""
+
+    if "closed_names" not in run:
+        statuses = _tdx(tdx.get_prod_ticket_statuses, TDX_APP_ID)
+        run["closed_names"] = {
+            st["Name"].strip().lower() for st in statuses if st.get("StatusClass") in CLOSED_STATUS_CLASSES
+        }
+
+    return run["closed_names"]
+
+
+def _close_one(inquiry: dict, dry_run: bool, run: dict) -> dict:
     sd_number = inquiry["SD_NUMBER"]
     tid = ticket_id(inquiry.get("MESSAGE"))
     result = {"inquiry": sd_number, "voided": inquiry.get("VOID_DATE"), "ticket": tid}
@@ -133,6 +167,9 @@ def _close_one(inquiry: dict, dry_run: bool) -> dict:
 
     if tid in _known_closed:
         return {**result, "action": "already closed"}
+
+    if tid in _left_open:
+        return {**result, "action": "reopened, left open"}
 
     try:
         ticket = _tdx(tdx.get_prod_ticket, tid)
@@ -149,6 +186,24 @@ def _close_one(inquiry: dict, dry_run: bool) -> dict:
     if ticket.get("StatusClass") in CLOSED_STATUS_CLASSES:
         _known_closed.add(tid)
         return {**result, "action": "already closed"}
+
+    # Open now. If it was ever closed before, someone reopened it (usually a
+    # requester's comment): leave it for a person.
+    try:
+        reopened = closed_before(_tdx(tdx.get_prod_ticket_feed, TDX_APP_ID, tid), _closed_names(run))
+    except Exception as exc:
+        logger.error("Could not read the history of TDX ticket %s for %s: %s", tid, sd_number, _why(exc))
+        return {**result, "action": "error", "error": f"history read failed: {_why(exc)}"}
+
+    if reopened:
+        _left_open.add(tid)
+        logger.warning(
+            "TDX ticket %s (%s) was closed before and reopened (%s); left open for a person",
+            tid,
+            sd_number,
+            ticket.get("StatusName"),
+        )
+        return {**result, "action": "reopened, left open"}
 
     if dry_run:
         logger.info("Dry run: would resolve TDX ticket %s (%s)", tid, sd_number)

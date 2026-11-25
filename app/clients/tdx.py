@@ -138,6 +138,22 @@ def get_prod_ticket(ticket_id: int) -> dict:
     return _request("get", f"{base_url}/api/tickets/{ticket_id}", base_url=base_url).json()
 
 
+def get_prod_ticket_feed(app_id: int, ticket_id: int) -> list[dict]:
+    """A **production** ticket's feed (comments and status changes), newest first."""
+
+    base_url = get_settings().tdx_prod_base_url
+
+    return _request("get", f"{base_url}/api/{app_id}/tickets/{ticket_id}/feed", base_url=base_url).json()
+
+
+def get_prod_ticket_statuses(app_id: int) -> list[dict]:
+    """A **production** ticketing app's statuses ({"ID", "Name", "StatusClass", ...})."""
+
+    base_url = get_settings().tdx_prod_base_url
+
+    return _request("get", f"{base_url}/api/{app_id}/tickets/statuses", base_url=base_url).json()
+
+
 def update_prod_ticket_status(app_id: int, ticket_id: int, status_id: int, comment: str) -> dict:
     """
     Change a **production** ticket's status with a private comment and no

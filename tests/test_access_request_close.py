@@ -4,7 +4,7 @@ import pytest
 
 from app.core.config import get_settings
 from app.services import access_request_close
-from app.services.access_request_close import close_completed, ticket_id
+from app.services.access_request_close import close_completed, closed_before, ticket_id
 from tests.conftest import TDX_BASE, TDX_PROD_BASE, FakeResponse
 
 PROD_SQL_URL = "https://pcr360.utk.pcr-360.com/api/KEY-PROD/sql.json"
@@ -28,8 +28,10 @@ def waits(monkeypatch):
     slept = []
     monkeypatch.setattr(access_request_close, "sleep", slept.append)
     access_request_close._known_closed.clear()
+    access_request_close._left_open.clear()
     yield slept
     access_request_close._known_closed.clear()
+    access_request_close._left_open.clear()
 
 
 @pytest.fixture
@@ -179,14 +181,117 @@ def test_ticket_id(message, expected):
     assert ticket_id(message) == expected
 
 
+# ---- reopened tickets (e.g. a requester's comment) -------------------------
+
+
+def _change(old, new, who="Kat Grimsley"):
+    return {"CreatedFullName": who, "Body": f'Changed Status from "<b>{old}</b>" to "<b>{new}</b>".<br><br>note'}
+
+
+def _comment(text="Still can't log in"):
+    return {"CreatedFullName": "Pat Doe", "Body": text}
+
+
+@pytest.mark.parametrize("closed_as", ["Resolved", "Cancelled", "Referred"])
+def test_ticket_closed_before_and_reopened_is_left_open(pcr, closed_as):
+    # newest first, as TDX returns it
+    pcr.prod_feeds[24803438] = [_comment(), _change("Open", closed_as), _change("New", "Open")]
+
+    result = close_completed(dry_run=False)
+
+    assert result["results"][1]["action"] == "reopened, left open"
+    assert [c["url"] for c in _feed_posts(pcr)] == [f"{TDX_PROD_BASE}/api/2278/tickets/24800607/feed"]
+
+
+def test_ticket_we_closed_and_was_reopened_is_left_open(pcr):
+    pcr.prod_feeds[24803438] = [
+        _change("Resolved", "Open", who="Pat Doe"),
+        _change("Open", "Resolved", who="Telephone Services TDX API"),
+    ]
+
+    result = close_completed(dry_run=False)
+
+    assert result["results"][1]["action"] == "reopened, left open"
+    assert len(_feed_posts(pcr)) == 1
+
+
+def test_routed_to_open_but_never_closed_is_resolved(pcr):
+    # Help Desk routing sets Open (ticket 24784303 on 2026-11-16).
+    pcr.prod_feeds[24803438] = [_change("New", "Open", who="Help Desk"), _comment()]
+
+    result = close_completed(dry_run=False)
+
+    assert result["results"][1]["action"] == "resolved"
+
+
+def test_dry_run_reports_reopened_too(pcr):
+    pcr.prod_feeds[24803438] = [_change("Open", "Resolved")]
+
+    result = close_completed(dry_run=True)
+
+    assert result["counts"] == {"would resolve": 1, "reopened, left open": 1}
+
+
+def test_reopened_ticket_is_not_checked_again(pcr):
+    pcr.prod_feeds[24803438] = [_change("Open", "Resolved")]
+
+    close_completed(dry_run=False)
+    reads = len(_ticket_reads(pcr))
+    second = close_completed(dry_run=False)
+
+    assert second["results"][1]["action"] == "reopened, left open"
+    # only the first ticket's (closed by us, so remembered) and nothing for the reopened one
+    assert len(_ticket_reads(pcr)) == reads
+
+
+def test_history_read_failure_never_resolves(pcr, monkeypatch):
+    real_get = pcr.get
+
+    def get(url, **kwargs):
+        if url.endswith("/24803438/feed"):
+            pcr.calls.append({"method": "GET", "url": url})
+            return FakeResponse(500, {})
+        return real_get(url, **kwargs)
+
+    monkeypatch.setattr("requests.get", get)
+
+    result = close_completed(dry_run=False)
+
+    assert result["results"][1]["action"] == "error"
+    assert result["results"][1]["error"] == "history read failed: HTTPError 500"
+    assert [c["url"] for c in _feed_posts(pcr)] == [f"{TDX_PROD_BASE}/api/2278/tickets/24800607/feed"]
+
+
+def test_statuses_are_read_once_per_run(pcr):
+    close_completed(dry_run=True)
+
+    assert len([c for c in pcr.calls if c["url"].endswith("/tickets/statuses")]) == 1
+
+
+@pytest.mark.parametrize(
+    "feed, expected",
+    [
+        ([], False),
+        ([_comment()], False),
+        ([_change("New", "Open")], False),
+        ([_change("Open", "Resolved")], True),
+        ([_change("Open", "resolved")], True),
+        ([{"Body": None}], False),
+        (None, False),
+    ],
+)
+def test_closed_before(feed, expected):
+    assert closed_before(feed, {"resolved", "cancelled"}) is expected
+
+
 # ---- TDX rate limit (60 calls a minute) -----------------------------------
 
 
 def test_every_tdx_call_is_paced(pcr, waits):
     close_completed(dry_run=False)
 
-    # 2 tickets x (read + resolve)
-    assert waits == [1.1] * 4
+    # statuses once + 2 tickets x (read + history + resolve)
+    assert waits == [1.1] * 7
 
 
 def test_rate_limited_call_waits_and_retries(pcr, waits, monkeypatch):
