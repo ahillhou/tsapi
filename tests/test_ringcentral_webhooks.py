@@ -15,10 +15,67 @@ DAYOFF = {"command": "DAYOFF", "extensionId": "101", "sender": "+15555550100"}
         ("dayoff 1234", {"command": "DAYOFF", "target_extension": "1234"}),
         ("", None),
         ("   ", None),
+        ("!!!", None),
     ],
 )
 def test_parse_command(message, expected):
     assert parse_command(message) == expected
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Day off",
+        "day-off",
+        "Dayoff.",
+        "DAY OFF!",
+        "days off",
+        "I'm off today",
+        "Taking the day off",
+        "out",
+        "I'm out sick",
+        "OOO",
+        "Off today, back tomorrow",
+    ],
+)
+def test_ways_to_say_dayoff(message):
+    assert parse_command(message) == {"command": "DAYOFF", "target_extension": None}
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["Back", "back.", "I'm back!", "Im back", "BACK IN", "Returning today", "Back from my day off"],
+)
+def test_ways_to_say_back(message):
+    assert parse_command(message) == {"command": "BACK", "target_extension": None}
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        ("Day off 1234", ("DAYOFF", "1234")),
+        ("day off for ext 1234", ("DAYOFF", "1234")),
+        ("Day off ext. 1234", ("DAYOFF", "1234")),
+        ("dayoff x1234", ("DAYOFF", "1234")),
+        ("1234 day off", ("DAYOFF", "1234")),
+        ("Back #1234", ("BACK", "1234")),
+        ("back ext1234", ("BACK", "1234")),
+    ],
+)
+def test_ways_to_give_an_extension(message, expected):
+    command, extension = expected
+    assert parse_command(message) == {"command": command, "target_extension": extension}
+
+
+@pytest.mark.parametrize("message", ["hello", "office", "in the office", "on", "backup"])
+def test_other_texts_are_not_commands(message):
+    assert parse_command(message)["command"] not in ("DAYOFF", "BACK")
+
+
+def test_day_off_with_spaces_texts_back(client, rc):
+    response = client.post("/demo/dayoff", json_body={**DAYOFF, "command": "Day off"})
+
+    assert response.json()["message"].startswith("Call rule enabled for ")
 
 
 def _patches(rc):

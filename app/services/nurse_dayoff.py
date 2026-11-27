@@ -11,6 +11,7 @@ number everyone texts, ext 41100, so it says nothing about the sender.)
 """
 
 import logging
+import re
 
 from app.clients.ringcentral.auth import get_platform
 from app.clients.ringcentral.extensions import (
@@ -28,18 +29,48 @@ logger = logging.getLogger(__name__)
 
 COMMANDS = ("DAYOFF", "BACK")
 
+# Words that mean each command, so people can text it the way they'd say it:
+# "Day off", "day-off", "I'm out today", "OOO", "Back!", "I'm back"...
+# The first of these words in the text wins, so "Off today, back tomorrow"
+# is DAYOFF and "Back from my day off" is BACK.
+DAYOFF_WORDS = {"dayoff", "dayoffs", "off", "out", "ooo", "sick", "pto", "vacation"}
+BACK_WORDS = {"back", "return", "returning", "returned"}
+
+# A token that is an extension number: "1234", "x1234", "ext1234", "#1234".
+_EXTENSION = re.compile(r"^(?:ext|x|#)?(\d{3,8})$")
+
 
 def parse_command(message: str) -> dict | None:
-    """'dayoff 1234' -> {'command': 'DAYOFF', 'target_extension': '1234'}"""
+    """
+    'dayoff 1234' -> {'command': 'DAYOFF', 'target_extension': '1234'}
 
-    parts = message.strip().upper().split()
+    Case, punctuation and extra words don't matter ("Day off ext. 1234",
+    "I'm back!"). A text with neither command gets its first word as the
+    command, which handle() then rejects.
+    """
 
-    if not parts:
+    # "Day-off" / "day off" -> "dayoff"; "ext. 1234" -> "ext 1234".
+    text = re.sub(r"\bdays?[\s\-_]*offs?\b", "dayoff", message.lower())
+    words = re.findall(r"[a-z0-9#]+", text)
+
+    if not words:
         return None
 
+    command = None
+    target_extension = None
+
+    for word in words:
+        number = _EXTENSION.match(word)
+        if number and target_extension is None:
+            target_extension = number.group(1)
+        elif command is None and word in DAYOFF_WORDS:
+            command = "DAYOFF"
+        elif command is None and word in BACK_WORDS:
+            command = "BACK"
+
     return {
-        "command": parts[0],
-        "target_extension": parts[1] if len(parts) > 1 else None,
+        "command": command or words[0].upper(),
+        "target_extension": target_extension,
     }
 
 
